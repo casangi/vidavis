@@ -1,4 +1,4 @@
-########################################################################
+#######################################################################
 #
 # Copyright (C) 2022
 # Associated Universities, Inc. Washington DC, USA.
@@ -36,7 +36,7 @@ import asyncio
 from uuid import uuid4
 from sys import platform
 import websockets
-from bokeh.events import SelectionGeometry
+from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
 from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.utils import find_ws_address, set_attributes
@@ -107,14 +107,26 @@ class CubeMask:
         ###########################################################################################################################
         self._js = { ### update stats in response to channel changes
                      ### -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-                     ### slider._scrolling is a flag that indicates if scrolling is in process
-                     ### while scrolling is in process the slider is disabled to prevent
-                     ### an oscillation (slider jumping back and forth between two values) that
-                     ### happened when the slider was moved quickly across multiple values
-                     'slider_w_stats':  '''slider._scrolling = true
-                                           slider.disabled = true
-                                           source.channel( slider.value, 0, msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )''',
-                     'slider_wo_stats': '''source.channel( slider.value, 0 )''',
+                     ### The slider and the events from the update of the image source are
+                     ### coupled because the image cube channel can be changed outside of the
+                     ### slider context.
+                     ###
+                     ###   (1) moving the slider updates the channel
+                     ###   (2) when the channel is changed using a hotkey the slider must be updated
+                     ###
+                     ### to fix a problem where moving the slider very quickly caused oscillation between
+                     ### two slider values (slider would just cycle back and forth) these two related
+                     ### updates are separated by the hotkeys scope. When the scope is 'channel' then
+                     ### the cursor is inside, hotkeys are active (and slider is updated). When outside
+                     ### and the scope is not equal to 'channel', the slider updates the channel.
+                     ###
+                     'slider_w_stats':  '''if ( window.hotkeys.getScope( ) !== 'channel' ) {
+                                               source.channel( slider.value, source.cur_chan[0], msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )
+                                           }
+                                           ''',
+                     'slider_wo_stats': '''if ( window.hotkeys.getScope( ) !== 'channel' ) {
+                                               source.channel( slider.value, source.cur_chan[0] )
+                                           }''',
                      ### setup maping of keys to numeric values
                      'keymap-init':     '''const keymap = { up: 38, down: 40, left: 37, right: 39, control: 17,
                                                             option: 18, next: 78, prev: 80, escape: 27, space: 32,
@@ -133,7 +145,7 @@ class CubeMask:
                                                source._polys = [ ]              //  [ { id: int,
                                                                                 //      type: string,
                                                                                 //      geometry: { xs: [ float, ... ], ys: [ float, ... ] } } ]
-                                               source._cursor_color = 'red'
+                                               source._cursor_color = 'white'
                                                source._default_color = 'black'
                                                source._annotation_ids = annotations.reduce( (acc,c) => { acc.push(c.id); return acc }, [ ] )
                                                source._annotations = annotations.reduce( (acc,c) => { acc[c.id] = c; return acc }, { } )
@@ -489,122 +501,165 @@ class CubeMask:
                                            cur_masks[2].forEach( ( xlate, i ) => {                          // SET ANNOTATIONS FOR NEW CHANNEL
                                                const mask_annotation = cb_obj._annotations[cur_masks[0][i]] // current annotation
                                                const mask_poly = cb_obj._polys[cur_masks[1][i]]             // current poly
-
-                                               // set Xs for the current annotation add any X translation from current poly
-                                               mask_annotation.xs = mask_poly.geometry.xs.reduce( (acc,x) => { acc.push(x + xlate[0]); return acc } , [ ] )
-                                               // set Ys for the current annotation add any Y translation from current poly
-                                               mask_annotation.ys = mask_poly.geometry.ys.reduce( 
-                                                                        (acc,y) => { acc.push(y + xlate[1]); return acc } , [ ] )
-                                                                        // restore selections for this channel
-                                                                        if ( cur_masks[3].includes( i ) ) mask_annotation.fill_color = cb_obj._cursor_color
-                                                                    } )
+                                               if ( mask_poly ) {                                           // sometimes this is undefined when
+                                                                                                            //    releasing the option key
+                                                   // set Xs for the current annotation add any X translation from current poly
+                                                   mask_annotation.xs = mask_poly.geometry.xs.reduce( (acc,x) => { acc.push(x + xlate[0]); return acc } , [ ] )
+                                                   // set Ys for the current annotation add any Y translation from current poly
+                                                   mask_annotation.ys = mask_poly.geometry.ys.reduce(
+                                                                            (acc,y) => { acc.push(y + xlate[1]); return acc } , [ ] )
+                                                                            // restore selections for this channel
+                                                                            if ( cur_masks[3].includes( i ) ) mask_annotation.fill_color = cb_obj._cursor_color
+                                               } } )
                                                cb_obj._cur_chan_prev = cb_obj.cur_chan''',
                      ### invoke key state management functions in response to keyboard events in the document. this
                      ### code manages the permitted key combinations while most of the state management is handled
                      ### by the state management functions.
-                     'setup-key-mgmt':  '''if ( typeof(document._key_state) === 'undefined' ) {
-                                               document._key_state = { option: false, control: false, shift: false }
-                                               document.addEventListener( 'keydown',
-                                                   (e) => { if ( e.keyCode === keymap.shift ) {
-                                                                // shift key is independent of the control/option state
-                                                                document._key_state.shift = true
-                                                            } else if ( document._key_state.option === true ) {     // option key
-                                                                e.preventDefault()                                  // prevent default key behavior
-                                                                if ( document._key_state.control === true ) {       // control key
-                                                                                                                    // arrow (no opt key) up moves through channels
-                                                                    if ( e.keyCode === keymap.up ) {
-                                                                        const prev_masks = curmasks( )
-                                                                        let cur_masks = null
+                     'setup-key-mgmt':  '''if ( typeof(document._hotkeys_initialized) === 'undefined' ) {
+                                               document._hotkeys_initialized = true
+                                               //****************************************************
+                                               //*** NEED TO IMPLEMENT STOKES TRAVERSAL WITH      ***
+                                               //*** Alt+Shift+Up and Alt+Shift+Down when an      ***
+                                               //*** image with multiple stokes axes is available ***
+                                               //****************************************************
+
+                                               // next channel
+                                               window.hotkeys( 'alt+up,ctrl+up,command+up', {scope: 'channel'},
+                                                               (e) => { e.preventDefault( )
                                                                         if ( source.cur_chan[1] + 1 >= source.num_chans[1] ) {
                                                                             // wrap round to the first channel
                                                                             source.channel( 0, source.cur_chan[0] )
-                                                                            cur_masks = curmasks( [ source.cur_chan[0], 0 ] )
                                                                         } else {
                                                                             // advance to the next channel
                                                                             source.channel( source.cur_chan[1] + 1, source.cur_chan[0] )
-                                                                            cur_masks = curmasks( [ source.cur_chan[0], source.cur_chan[1] + 1 ] )
-                                                                        }
-                                                                    } else if ( e.keyCode === keymap.down ) {
+                                                                        } } )
+                                               // previous channel
+                                               window.hotkeys( 'alt+down,ctrl+down,command+down', { scope: 'channel'},
+                                                               (e) => { e.preventDefault( )
                                                                         if ( source.cur_chan[1] - 1 >= 0 ) {
                                                                             // advance to the prev channel
                                                                             source.channel( source.cur_chan[1] - 1, source.cur_chan[0] )
                                                                         } else {
                                                                             // wrap round to the last channel
                                                                             source.channel( source.num_chans[1] - 1, source.cur_chan[0] )
-                                                                        }
-                                                                    }
-                                                                }                                              // control key
-                                                                else {                                         // no control key
-                                                                    const shape = source.image_source.shape
-                                                                    const shifted = document._key_state.shift
-                                                                    if ( e.keyCode === keymap.control ) {
-                                                                        let cm = curmasks( )
-                                                                        if ( document._key_state.option )
-                                                                            state_clear_cursor( cm )
-                                                                            document._key_state.control = true
-                                                                            state_clear_cursor( cm )
-                                                                        } else if ( e.keyCode === keymap.next ) {
-                                                                            state_next_cursor( )
-                                                                        } else if ( e.keyCode === keymap.prev ) {
-                                                                            state_prev_cursor( )
-                                                                        } else if ( e.keyCode === keymap.space ) {
-                                                                            let cm = curmasks( )
-                                                                            state_cursor_to_selection( cm )
-                                                                        } else if ( e.keyCode === keymap.escape ) {
-                                                                            state_clear_selection( )
-                                                                        } else if ( e.keyCode === keymap.delete ) {
-                                                                            // remove cursor mask from channel
-                                                                            state_remove_mask( )
-                                                                        } else if ( e.keyCode === keymap.up ) {
-                                                                            state_translate_selection( 0, shifted ? Math.floor(shape[1]/10) : 1 )
-                                                                        } else if ( e.keyCode === keymap.down ) {
-                                                                            state_translate_selection( 0, shifted ? -Math.floor(shape[1]/10) : -1 )
-                                                                        } else if ( e.keyCode === keymap.left ) {
-                                                                            state_translate_selection( shifted ? -Math.floor(shape[0]/10) : -1, 0 )
-                                                                        } else if ( e.keyCode === keymap.right ) {
-                                                                            state_translate_selection( shifted ? Math.floor(shape[0]/10) : 1, 0 )
-                                                                        } else if ( e.keyCode === keymap.copy ) {
-                                                                            state_copy_selection( )
-                                                                        } else if ( e.keyCode === keymap.paste ) {
-                                                                            if ( document._key_state.shift ) {
-                                                                                register_mask_change('V')
-                                                                                for ( let stokes=0; stokes < source._chanmasks.length; ++stokes ) {
-                                                                                    for ( let chan=0; chan < source._chanmasks[stokes].length; ++chan ) {
-                                                                                        if ( stokes != source._copy_buffer[1][0] ||
-                                                                                             chan != source._copy_buffer[1][1] )
-                                                                                            state_paste_selection( curmasks( [ stokes, chan ] ) )
-                                                                                    }
-                                                                                }
-                                                                            } else {
-                                                                                register_mask_change('v')
-                                                                                state_paste_selection( )
+                                                                        } } )
+
+                                               // next polarization/stokes
+                                               window.hotkeys( 'alt+right,ctrl+right,command+right', {scope: 'channel'},
+                                                               (e) => { e.preventDefault( )
+                                                                        if ( source.cur_chan[0] + 1 >= source.num_chans[0] ) {
+                                                                            // wrap round to the first channel
+                                                                            source.channel( source.cur_chan[1], 0 )
+                                                                        } else {
+                                                                            // advance to the next channel
+                                                                            source.channel( source.cur_chan[1], source.cur_chan[0] + 1 )
+                                                                        } } )
+                                               // previous polarization/stokes
+                                               window.hotkeys( 'alt+left,ctrl+left,command+left', { scope: 'channel'},
+                                                               (e) => { e.preventDefault( )
+                                                                        if ( source.cur_chan[0] - 1 >= 0 ) {
+                                                                            // advance to the prev channel
+                                                                            source.channel( source.cur_chan[1], source.cur_chan[0] - 1 )
+                                                                        } else {
+                                                                            // wrap round to the last channel
+                                                                            source.channel( source.cur_chan[1], source.num_chans[0] - 1)
+                                                                        } } )
+
+                                               // next region
+                                               window.hotkeys( 'alt+]', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_next_cursor( )} )
+                                               // prev region
+                                               window.hotkeys( 'alt+[', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_prev_cursor( )} )
+                                               // add region to selection
+                                               window.hotkeys( 'alt+space, alt+/', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_cursor_to_selection( curmasks( ) ) } )
+                                               // clear selection
+                                               window.hotkeys( 'alt+escape', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_clear_selection( ) } )
+                                               // delete region identified by cursor
+                                               window.hotkeys( 'alt+del,alt+backspace', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_remove_mask( ) } )
+                                               // move selection set up one pixel
+                                               window.hotkeys( 'up', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_translate_selection( 0, 1 ) } )
+                                               // move selection set up several pixel
+                                               window.hotkeys( 'shift+up', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        const shape = source.image_source.shape
+                                                                        state_translate_selection( 0, Math.floor(shape[1]/10 ) ) } )
+                                               // move selection set down one pixel
+                                               window.hotkeys( 'down', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_translate_selection( 0, -1 ) } )
+                                               // move selection set down several pixel
+                                               window.hotkeys( 'shift+down', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        const shape = source.image_source.shape
+                                                                        state_translate_selection( 0, -Math.floor(shape[1]/10 ) ) } )
+                                               // move selection set left one pixel
+                                               window.hotkeys( 'left', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_translate_selection( -1, 0 ) } )
+                                               // move selection set left several pixel
+                                               window.hotkeys( 'shift+left', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        const shape = source.image_source.shape
+                                                                        state_translate_selection( -Math.floor(shape[0]/10 ), 0 ) }  )
+                                               // move selection set right one pixel
+                                               window.hotkeys( 'right', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_translate_selection( 1, 0 ) } )
+                                               // move selection set right several pixel
+                                               window.hotkeys( 'shift+right', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        const shape = source.image_source.shape
+                                                                        state_translate_selection( Math.floor(shape[0]/10 ), 0 ) } )
+
+                                               // copy selection
+                                               window.hotkeys( 'alt+c', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_copy_selection( )} )
+
+                                               // paste selection current channel
+                                               window.hotkeys( 'alt+v', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        register_mask_change('v')
+                                                                        state_paste_selection( ) } )
+
+                                               // paste selection to all channels
+                                               window.hotkeys( 'alt+shift+v', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        register_mask_change('V')
+                                                                        for ( let stokes=0; stokes < source._chanmasks.length; ++stokes ) {
+                                                                            for ( let chan=0; chan < source._chanmasks[stokes].length; ++chan ) {
+                                                                                if ( stokes != source._copy_buffer[1][0] ||
+                                                                                     chan != source._copy_buffer[1][1] )
+                                                                                    state_paste_selection( curmasks( [ stokes, chan ] ) )
                                                                             }
-                                                                        }
-                                                                    }                                              // no control key
-                                                            } else {                                               // no option key
-                                                                    // option key first pressed
-                                                                    if ( e.keyCode === keymap.option ) {
-                                                                        document._key_state.option = true
-                                                                        if ( document._key_state.control !== true ) state_initialize_cursor( )
-                                                                    }
-                                                                    else if ( e.keyCode === keymap.control ) {
-                                                                        document._key_state.control = true
-                                                                    }
-                                                            }                                                  // no option key
-                                                          } )
-                                               document.addEventListener( 'keyup',
-                                                   (e) => { // option key released
-                                                            if ( e.keyCode === keymap.option ) {
-                                                                document._key_state.option = false
-                                                                state_clear_cursor( )
-                                                            } else if ( e.keyCode === keymap.control ) {
-                                                                document._key_state.control = false
-                                                                if ( document._key_state.option === true )
-                                                                    state_initialize_cursor( )
-                                                            } else if ( e.keyCode === keymap.shift ) {
-                                                                document._key_state.shift = false
-                                                            }
-                                                          } )
+                                                                        } } )
+
+                                               // initialize for cursor operations
+                                               window.hotkeys( '*', { keyup: true, scope: 'channel' },
+                                                               (e,handler) => { if ( e.type === 'keydown' ) {
+                                                                                    if ( (e.key === 'Alt' || e.key == 'Meta') && ! window.hotkeys.control )
+                                                                                        state_initialize_cursor( )
+                                                                                    if ( e.key === 'Control' && window.hotkeys.option )
+                                                                                        state_clear_cursor( curmasks( ) )
+                                                                                }
+                                                                                if ( e.type === 'keyup' ) {
+                                                                                    if ( e.key === 'Alt' || e.key == 'Meta' )
+                                                                                        state_clear_cursor( )
+                                                                                    if ( e.key === 'Control' && window.hotkeys.option )
+                                                                                        state_initialize_cursor( )
+                                                                                } } )
+
                                            }'''
                         }
 
@@ -661,30 +716,7 @@ class CubeMask:
             self._annotations = [ PolyAnnotation( xs=[], ys=[], fill_alpha=0.1, line_color=None, fill_color='black', visible=True ) for _ in range(maxanno) ]
 
             self._pipe['control'].register( self._ids['done'], receive_return_value )
-            self._image_source = ImageDataSource( image_source=self._pipe['image'],
-                                                  init_script=CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids ),
-                                                                        code='let source = cb_obj;' + self._js['mask-state-init'] + self._js['keymap-init'] +
-                                                                             self._js['func-curmasks']( ) + self._js['key-state-funcs'] +
-                                                                             self._js['setup-key-mgmt'] +
-                                                                             """// This function is called to collect the masks and/or stop
-                                                                                source.done = ( ) => {
-                                                                                    function done_close_window( msg ) {
-                                                                                        if ( msg.result === 'stopped' ) {
-                                                                                            window.close()
-                                                                                        }
-                                                                                    }
-                                                                                    ctrl.send( ids['done'],
-                                                                                               { action: 'done', value: collect_masks( ) },
-                                                                                               done_close_window )
-                                                                                }
-                                                                                // exported functions -- enable/disable masking, retrieve masks etc.
-                                                                                source._masking_enabled = true
-                                                                                source.disable_masking = ( ) => source._masking_enabled = false
-                                                                                source.enable_masking = ( ) => source._masking_enabled = true
-                                                                                source.masks = ( ) => collect_masks( )
-                                                                                source.breadcrumbs = ( ) => source._mask_breadcrumbs
-                                                                                source.drop_breadcrumb = ( code ) => register_mask_change( code )
-                                                                    """) )
+            self._image_source = ImageDataSource( image_source=self._pipe['image'] )
 
             self._image = set_attributes( figure( output_backend="webgl",
                                                   tools=[ "poly_select", "lasso_select","box_select","pan,wheel_zoom","box_zoom",
@@ -702,6 +734,13 @@ class CubeMask:
             self._image.grid.grid_line_width = 0.5
             self._image.plot_height = 400
             self._image.plot_width = 400
+
+            self._image.js_on_event( MouseEnter, CustomJS( args=dict( source=self._image_source ), code=self._js['func-curmasks']( ) +
+                                                                              self._js['key-state-funcs'] +
+                                                                              '''window.hotkeys.setScope('channel')''' ) )
+            self._image.js_on_event( MouseLeave, CustomJS( args=dict( source=self._image_source ), code=self._js['func-curmasks']( ) +
+                                                                              self._js['key-state-funcs'] +
+                                                                              '''window.hotkeys.setScope( )''' ) )
 
             self._image.js_on_event( SelectionGeometry,
                                          CustomJS( args=dict( source=self._image_source,
@@ -805,14 +844,6 @@ class CubeMask:
                                                     title="Spectrum", tools=[ self._hover['spectra'] ] ), **kw )
             self._spectra.add_layout(self._sp_span)
 
-            self._cb['sptap'] = CustomJS( args=dict( span=self._sp_span, source=self._image_source ),
-                                          code = '''if ( span.location >= 0 ) {
-                                                        source.channel( span.location, source.cur_chan[0] )
-                                                        //      chan----^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^-----stokes
-                                                    }''' )
-
-            self._spectra.js_on_event('tap', self._cb['sptap'])
-
             self._spectra.x_range.range_padding = self._spectra.y_range.range_padding = 0
             self._spectra.line( x='x', y='y', source=self._image_spectra )
             self._spectra.grid.grid_line_width = 0.5
@@ -884,11 +915,53 @@ class CubeMask:
             self._slider.js_on_change( 'value', self._cb['slider'] )
 
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider ),
-                                                               code=('''slider.value = cb_obj.cur_chan[1]
-                                                                        if ( slider._scrolling ) {
-                                                                            slider.disabled = false
-                                                                            slider._scrolling = false }''' if self._slider else '') +
-                                                                    self._js['func-curmasks']('cb_obj') + self._js['add-polygon'] ) )
+                                                               code=( '''if ( window.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
+                                                                      self._slider else '') + self._js['func-curmasks']('cb_obj') + self._js['add-polygon'] ) )
+
+        if self._spectra:
+            ###
+            ### this is set up in connect( ) because slider must be updated if it is used othersize
+            ### channel should be directly set (previously the slider was implicitly set when a new
+            ### channel was selected, but I think this update was broken when the oscillation problem
+            ### we fixed, see above)
+            ###
+            self._cb['sptap'] = CustomJS( args=dict( span=self._sp_span, source=self._image_source, slider=self._slider ),
+                                          code = '''if ( span.location >= 0 ) {
+                                                        if ( slider ) slider.value = span.location
+                                                        else source.channel( span.location, source.cur_chan[0] )
+                                                             //      chan----^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^-----stokes
+                                                    }''' )
+
+            self._spectra.js_on_event('tap', self._cb['sptap'])
+
+
+
+        ## this is in the connect function to allow for access to self._statistics_source
+        self._image_source.init_script = CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
+                                                              stats_source=self._statistics_source ),
+                                                              code='let source = cb_obj;' + self._js['mask-state-init'] + self._js['keymap-init'] +
+                                                                   self._js['func-curmasks']( ) + self._js['key-state-funcs'] +
+                                                                   self._js['setup-key-mgmt'] +
+                                                                   """// This function is called to collect the masks and/or stop
+                                                                      source.done = ( ) => {
+                                                                          function done_close_window( msg ) {
+                                                                              if ( msg.result === 'stopped' ) {
+                                                                                  window.close()
+                                                                              }
+                                                                          }
+                                                                          ctrl.send( ids['done'],
+                                                                                     { action: 'done', value: collect_masks( ) },
+                                                                                     done_close_window )
+                                                                      }
+                                                                      // exported functions -- enable/disable masking, retrieve masks etc.
+                                                                      source._masking_enabled = true
+                                                                      source.disable_masking = ( ) => source._masking_enabled = false
+                                                                      source.enable_masking = ( ) => source._masking_enabled = true
+                                                                      source.masks = ( ) => collect_masks( )
+                                                                      source.breadcrumbs = ( ) => source._mask_breadcrumbs
+                                                                      source.drop_breadcrumb = ( code ) => register_mask_change( code )
+                                                                      source.update_statistics = ( data ) => stats_source.data = data
+                                                                   """ )
 
     def js_obj( self ):
         '''return the javascript object that can be used for control. This
@@ -939,22 +1012,22 @@ class CubeMask:
                                <tr><th>buttons/key(s)</th><th>description</th></tr>
                                EXTRAROWS
                                <tr><td><b>option</b></td><td>display mask cursor (<i>at least one mask must have been drawn</i>)</td></tr>
-                               <tr><td><b>option</b>-<b>n</b></td><td>move cursor to next mask</td></tr>
-                               <tr><td><b>option</b>-<b>p</b></td><td>move cursor to previous mask</td></tr>
-                               <tr><td><b>option</b>-<b>space</b></td><td>add mask to selection set</td></tr>
+                               <tr><td><b>option</b>-<b>]</b></td><td>move cursor to next mask</td></tr>
+                               <tr><td><b>option</b>-<b>[</b></td><td>move cursor to previous mask</td></tr>
+                               <tr><td><b>option</b>-<b>/</b></td><td>add mask to selection set</td></tr>
                                <tr><td><b>option</b>-<b>escape</b></td><td>clear selection set</td></tr>
-                               <tr><td><b>option</b>-<b>down</b></td><td>move selection set down one pixel</td></tr>
-                               <tr><td><b>option</b>-<b>up</b></td><td>move selection set up one pixel</td></tr>
-                               <tr><td><b>option</b>-<b>left</b></td><td>move selection one pixel to the left</td></tr>
-                               <tr><td><b>option</b>-<b>right</b></td><td>move selection one pixel to the right</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>up</b></td><td>move selection up several pixels</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>down</b></td><td>move selection down several pixels</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>left</b></td><td>move selection several pixels to the left</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>right</b></td><td>move selection several pixels to the right</td></tr>
-                               <tr><td><b>option</b>-<b>control</b>-<b>up</b></td><td>to next channel</td></tr>
-                               <tr><td><b>option</b>-<b>control</b>-<b>down</b></td><td>to previous channel</td></tr>
-                               <tr><td><b>option</b>-<b>control</b>-<b>right</b></td><td>to next stokes axis</td></tr>
-                               <tr><td><b>option</b>-<b>control</b>-<b>left</b></td><td>to previous stokes axis</td></tr>
+                               <tr><td><b>down</b></td><td>move selection set down one pixel</td></tr>
+                               <tr><td><b>up</b></td><td>move selection set up one pixel</td></tr>
+                               <tr><td><b>left</b></td><td>move selection one pixel to the left</td></tr>
+                               <tr><td><b>right</b></td><td>move selection one pixel to the right</td></tr>
+                               <tr><td><b>shift</b>-<b>up</b></td><td>move selection up several pixels</td></tr>
+                               <tr><td><b>shift</b>-<b>down</b></td><td>move selection down several pixels</td></tr>
+                               <tr><td><b>shift</b>-<b>left</b></td><td>move selection several pixels to the left</td></tr>
+                               <tr><td><b>shift</b>-<b>right</b></td><td>move selection several pixels to the right</td></tr>
+                               <tr><td><b>option</b>-<b>up</b></td><td>to next channel (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
+                               <tr><td><b>option</b>-<b>down</b></td><td>to previous channel (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
+                               <tr><td><b>option</b>-<b>shift</b>-<b>up</b></td><td>to next stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
+                               <tr><td><b>option</b>-<b>shift</b>-<b>down</b></td><td>to previous stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
                                <tr><td><b>option</b>-<b>c</b></td><td>copy selection set to the copy buffer</td></tr>
                                <tr><td><b>option</b>-<b>v</b></td><td>paste selection set into the current channel</td></tr>
                                <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>

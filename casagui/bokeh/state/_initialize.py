@@ -31,10 +31,10 @@ applications produce'''
 from os.path import dirname, join, basename
 from bokeh import resources
 from ...utils import path_to_url, static_vars, have_network
-from casagui import __version__ as VERSION
 from bokeh import __version__ as bokeh_version
 
-CASALIB_VERSION = "0.0.1"
+CASALIB_VERSION = "0.0.2"
+CASAGUIJS_VERSION = "0.0.6"
 
 @static_vars(initialized=False,do_local_subst=not have_network( ))
 def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
@@ -113,14 +113,19 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
     ### Initialize the Bokeh dependent library(ies)
     ###
     if bokeh is None:
-        bokehlib = f"casaguijs-v{VERSION}.{bokeh_dev}-b{bokeh_major_minor}.min.js"
+        bokehlib = f"casaguijs-v{CASAGUIJS_VERSION}.{bokeh_dev}-b{bokeh_major_minor}.min.js"
         if initialize_bokeh.do_local_subst:
             bokehlib_url = path_to_url( join( dirname(__file__), 'js', bokehlib ) )
         else:
             ### ------------------------------------------------------------------------------------------
             ### should potentially find a better download location...
             ### ------------------------------------------------------------------------------------------
-            bokehlib_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{VERSION}/{bokehlib}"
+            ### poor availablity (fails to load, server not available etc (even from NRAO network):
+            #bokehlib_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{CASAGUIJS_VERSION}/{bokehlib}"
+            ### does not work at all (CERT issue?):
+            #bokehlib_url = f"https://raw.githubusercontent.com/casangi/casagui-js/main/runtime/{CASAGUIJS_VERSION}/{bokehlib}"
+            bokehlib_url = f"https://cdn.jsdelivr.net/gh/casangi/casagui-js@main/runtime/{CASAGUIJS_VERSION}/{bokehlib}"
+
         bokehlib_libs = [ bokehlib_url ]
     else:
         bokehlib_libs = [ bokeh ] if isinstance(bokeh,str) else bokeh
@@ -141,7 +146,11 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
             ### ------------------------------------------------------------------------------------------
             ### should potentially find a better download location...
             ### ------------------------------------------------------------------------------------------
-            jslib_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{VERSION}/{jslib}"
+            ### poor availablity (fails to load, server not available etc (even from NRAO network):
+            #jslib_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{CASAGUIJS_VERSION}/{jslib}"
+            ### does not work at all (CERT issue?):
+            #jslib_url = f"https://raw.githubusercontent.com/casangi/casagui-js/main/runtime/{CASAGUIJS_VERSION}/{jslib}"
+            jslib_url = f"https://cdn.jsdelivr.net/gh/casangi/casagui-js@main/runtime/{CASAGUIJS_VERSION}/{jslib}"
         jslib_libs = [ jslib_url ]
     else:
         jslib_libs = [ js ] if isinstance(js,str) else js
