@@ -10,7 +10,7 @@ import holoviews as hv
 import hvplot.pandas
 import numpy as np
 import xarray as xr
-from bokeh.io import export_svg
+from bokeh.io import export_svgs
 from bokeh.models.formatters import BasicTickFormatter, DatetimeTickFormatter
 from bokeh.plotting import figure
 
@@ -22,11 +22,10 @@ try:
 except ImportError:
     _have_svg2pdf = False
 
-
 _MIN_PLOT_WIDTH = 600
 _MIN_PLOT_HEIGHT = 500
 
-def __setup_axis(axis):
+def _setup_axis(axis):
     labels = {'uvdist': 'UVdist', 'wtxamp': 'Wt*Amp', 'wtsp': 'WtSp', 'sigmasp': 'SigmaSp'}
     if axis in labels:
         label = labels[axis]
@@ -42,7 +41,7 @@ def __setup_axis(axis):
 
     return (label, formatter)
 
-def __add_axis_unit(axis, first_time):
+def _add_axis_unit(axis, first_time):
     units = {"Interval": " (s)", "Frequency": " (GHz)", "Velocity": " (km/s)", "U": " (m)",
              "V": " (m)", "W": " (m)", "Uvdist": " (m)", "Phase": " (deg)"}
     if axis in units:
@@ -54,7 +53,7 @@ def __add_axis_unit(axis, first_time):
     else:
         return axis
 
-def __apply_flags(xds):
+def _apply_flags(xds):
     flg_xds = xds.copy()
     flags = np.atleast_1d('FLAG')
     for flag_var in flags:
@@ -65,12 +64,12 @@ def __apply_flags(xds):
     #print("flag xds=", flg_xds)
     return flg_xds
 
-def __get_plot_dataset(xds, xkey, ykey, xaxis, yaxis):
+def _get_plot_dataset(xds, xkey, ykey, xaxis, yaxis):
     # Dataset containing plotted axes only
     # Coordinates
     plot_coords = {}
-    xdims = list(__get_array_dims(xds, xkey))
-    ydims = list(__get_array_dims(xds, ykey))
+    xdims = list(_get_array_dims(xds, xkey))
+    ydims = list(_get_array_dims(xds, ykey))
     # Remove uvw_index since already indexed to get u, v, w
     if 'uvw_index' in xdims: xdims.remove('uvw_index')
     if 'uvw_index' in ydims: ydims.remove('uvw_index')
@@ -82,8 +81,8 @@ def __get_plot_dataset(xds, xkey, ykey, xaxis, yaxis):
         plot_coords[dim]=xds.coords[dim]
 
     # Data variables
-    xvals = __get_data(xds, xkey, xaxis)
-    yvals = __get_data(xds, ykey, yaxis)
+    xvals = _get_data(xds, xkey, xaxis)
+    yvals = _get_data(xds, ykey, yaxis)
     plot_data = {}
     plot_data[xaxis] = (xdims, xvals)
     plot_data[yaxis] = (ydims, yvals)
@@ -96,11 +95,11 @@ def __get_plot_dataset(xds, xkey, ykey, xaxis, yaxis):
     #print("plot xds=", plot_xds)
     return plot_xds
 
-def __get_array_dims(xds, key):
+def _get_array_dims(xds, key):
     if isinstance(key, tuple):
         # axis calculated from two values
-        dims0 = __get_array_dims(xds, key[0])
-        dims1 = __get_array_dims(xds, key[1])
+        dims0 = _get_array_dims(xds, key[0])
+        dims1 = _get_array_dims(xds, key[1])
         return dims0 if len(dims0) > len(dims1) else dims1
     if key in xds.data_vars:
         return xds.data_vars[key].dims
@@ -109,7 +108,7 @@ def __get_array_dims(xds, key):
     else:
         raise RuntimeError(f"Column for {key} axis does not exist in MeasurementSet")
 
-def __get_array(xds, key):
+def _get_array(xds, key):
     if key in xds.data_vars:
         xda = xds.data_vars[key]
     else:
@@ -120,7 +119,7 @@ def __get_array(xds, key):
 
     return xda
 
-def __get_values(xda, key, axis):
+def _get_values(xda, key, axis):
     if key == 'UVW':
         if axis == "u":
             return xda.sel(uvw_index=0).values
@@ -154,23 +153,23 @@ def __get_values(xda, key, axis):
 
     return xda.values
 
-def __get_calc_values(xds, key, axis):
+def _get_calc_values(xds, key, axis):
     # axis calculated from two values
     if axis == 'wtxamp':
         print("data dims=", xds.data_vars['DATA'].dims)
-        weight = __get_data(xds, 'WEIGHT', 'weight')
-        amp = __get_data(xds, 'DATA', 'amp')
+        weight = _get_data(xds, 'WEIGHT', 'weight')
+        amp = _get_data(xds, 'DATA', 'amp')
         print("shape: weight=", weight.shape, "amp=", amp.shape)
         return weight * amp
     else:
         raise RuntimeError(f"axis {axis} not supported")
 
-def __get_data(xds, key, axis):
+def _get_data(xds, key, axis):
     if isinstance(key, tuple):
-        return __get_calc_values(xds, key, axis)
+        return _get_calc_values(xds, key, axis)
     else:
-        xda = __get_array(xds, key)
-        return __get_values(xda, key, axis)
+        xda = _get_array(xds, key)
+        return _get_values(xda, key, axis)
 
 def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True):
     """Plot visibility axes and show interactive plot or export to file.
@@ -254,18 +253,18 @@ def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True)
     ykey = axis_keys[yaxis]
 
     # Read ms into xarray dataset
-    #print("Reading MeasurementSet")
+    print("Reading MeasurementSet")
     ms_xds = read_ms(vis)
     first_time = ms_xds.xds0.data_vars["TIME"].values[0]
 
-    # Set up axis labels and plot title
-    xlabel, xformatter = __setup_axis(xaxis)
-    ylabel, yformatter = __setup_axis(yaxis)
+    # Set up axis labels and plot title (with simple axis labels)
+    xlabel, xformatter = _setup_axis(xaxis)
+    ylabel, yformatter = _setup_axis(yaxis)
     if not title:
         msname = os.path.basename(vis)
         title = msname + " " + ylabel + " vs. " +  xlabel
-    xlabel = __add_axis_unit(xlabel, first_time)
-    ylabel = __add_axis_unit(ylabel, first_time)
+    xlabel = _add_axis_unit(xlabel, first_time)
+    ylabel = _add_axis_unit(ylabel, first_time)
 
     nspw = ms_xds.dims['spw_ids']
     spw_ids = ms_xds.coords['spw_ids'].values
@@ -275,10 +274,10 @@ def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True)
         if partition not in ms_xds.attrs:
             continue
 
-        #print("Plotting spw", spw_ids[spw])
+        print("Plotting spw", spw_ids[spw])
         xds = ms_xds.attrs[partition]
-        flg_xds = __apply_flags(xds)
-        plot_xds = __get_plot_dataset(flg_xds, xkey, ykey, xaxis, yaxis)
+        flg_xds = _apply_flags(xds)
+        plot_xds = _get_plot_dataset(flg_xds, xkey, ykey, xaxis, yaxis)
 
         # Convert to dataframe and plot
         plot_df = plot_xds.to_dataframe()
@@ -286,7 +285,7 @@ def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True)
             title=title, xlabel=xlabel, ylabel=ylabel,
             xformatter=xformatter, yformatter=yformatter,
             responsive=True, min_width=_MIN_PLOT_WIDTH, min_height=_MIN_PLOT_HEIGHT,
-            rasterize=True, cmap=['blue'], hover=True)
+            rasterize=True, cmap=['blue'], padding=(0.01, 0.01), hover=True)
 
         if spw == 0:
             layout = plot
@@ -311,7 +310,7 @@ def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True)
             if _have_svg2pdf:
                 fig = hv.render(layout)
                 fig.output_backend = "svg"
-                export_svg(fig, filename='tmp.svg')
+                export_svgs(fig, filename='tmp.svg')
                 svg2pdf(url="tmp.svg", write_to=plotfile)
                 os.system("rm tmp.svg")
             else:
