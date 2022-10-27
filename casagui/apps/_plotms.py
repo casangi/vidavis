@@ -73,12 +73,8 @@ def _get_plot_dataset(xds, xkey, ykey, xaxis, yaxis):
     # Remove uvw_index since already indexed to get u, v, w
     if 'uvw_index' in xdims: xdims.remove('uvw_index')
     if 'uvw_index' in ydims: ydims.remove('uvw_index')
-    for dim in xdims:
-        if dim == 'uvw_index': continue
-        plot_coords[dim]=xds.coords[dim]
-    for dim in ydims:
-        if dim == 'uvw_index': continue
-        plot_coords[dim]=xds.coords[dim]
+    for dim in xdims: plot_coords[dim]=xds.coords[dim]
+    for dim in ydims: plot_coords[dim]=xds.coords[dim]
 
     # Data variables
     xvals = _get_data(xds, xkey, xaxis)
@@ -96,11 +92,8 @@ def _get_plot_dataset(xds, xkey, ykey, xaxis, yaxis):
     return plot_xds
 
 def _get_array_dims(xds, key):
-    if isinstance(key, tuple):
-        # axis calculated from two values
-        dims0 = _get_array_dims(xds, key[0])
-        dims1 = _get_array_dims(xds, key[1])
-        return dims0 if len(dims0) > len(dims1) else dims1
+    if isinstance(key, tuple): # axis calculated from two values
+        return tuple(set(_get_array_dims(xds, key[0]) + _get_array_dims(xds, key[1])))
     if key in xds.data_vars:
         return xds.data_vars[key].dims
     elif key in xds.coords:
@@ -132,7 +125,7 @@ def _get_values(xda, key, axis):
             v = xda.sel(uvw_index=1).values
             return np.sqrt(u*u + v*v)
     elif key == 'DATA':
-        if axis == "amp":
+        if axis in ["amp", "wtxamp"]:
             return np.abs(xda.values)
         if axis == "phase":
             return np.angle(xda.values) * 180.0 / np.pi
@@ -155,12 +148,14 @@ def _get_values(xda, key, axis):
 
 def _get_calc_values(xds, key, axis):
     # axis calculated from two values
+    data0 = _get_data(xds, key[0], axis)
+    data1 = _get_data(xds, key[1], axis)
+
     if axis == 'wtxamp':
-        print("data dims=", xds.data_vars['DATA'].dims)
-        weight = _get_data(xds, 'WEIGHT', 'weight')
-        amp = _get_data(xds, 'DATA', 'amp')
-        print("shape: weight=", weight.shape, "amp=", amp.shape)
-        return weight * amp
+        return data0 * data1
+    elif axis == 'baseline':
+        num_ant = max(max(data0), max(data1)) + 1
+        return np.array([(num_ant + 1) * ant1 - (ant1 * ant1 + 1) / 2 + ant2 for ant1, ant2 in zip(data0, data1)])
     else:
         raise RuntimeError(f"axis {axis} not supported")
 
@@ -206,7 +201,7 @@ def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True)
                  'corr': 'pol',
                  'antenna1': 'ANTENNA1',
                  'antenna2': 'ANTENNA2',
-                 #'baseline': 'baseline',
+                 'baseline': ('ANTENNA1', 'ANTENNA2'),
                  'observation': 'OBSERVATION_ID',
                  'intent': 'STATE_ID',
                  'feed1': 'FEED1',
