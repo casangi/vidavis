@@ -14,9 +14,9 @@ from bokeh.io import export_svgs
 from bokeh.models.formatters import BasicTickFormatter, DatetimeTickFormatter
 from bokeh.plotting import figure
 
-from cngi_io import read_ms
-from casacore.quanta import constants, quantity
 from casacore.measures import measures
+from casacore.quanta import constants, quantity
+from cngi_io import read_ms
 
 try:
     from cairosvg import svg2pdf
@@ -156,7 +156,7 @@ def _get_values(xda, key, axis):
             return xda.sel(uvw_index=1).values
         if axis in ["w", "wwave"]:
             return xda.sel(uvw_index=2).values
-        if axis == "uvdist":
+        if axis in ["uvdist", "uvwave"]:
             u = xda.sel(uvw_index=0).values
             v = xda.sel(uvw_index=1).values
             return np.sqrt(u*u + v*v)
@@ -195,7 +195,7 @@ def _get_calc_values(xds, key, axis):
         num_ant = max(max(data0), max(data1)) + 1
         return np.array([(num_ant + 1) * ant1 - (ant1 * ant1 + 1) / 2 + ant2 for ant1, ant2 in zip(data0, data1)])
     elif "wave" in axis:
-        # data0=U/V/W (row), data1=FREQ (chan)
+        # data0=U/V/W/UVDIST (row), data1=FREQ (chan)
         wave = np.zeros(shape=(xds.dims['chan'], xds.dims['row']))
         for i in range(xds.dims['row']):
             wave[:, i] = (data0[i] / constants['c'].get_value()) * (data1)
@@ -236,6 +236,28 @@ def _calc_velocity(xds, freq_frame, freq_unit, rest_freq):
 
     xds.velocity.values = np.array(velocities)
 
+def _save_plot(plotfile, plot):
+    print("Saving plot to", plotfile)
+
+    if plotfile.endswith(".png"):
+        hvplot.save(plot, plotfile)
+    elif plotfile.endswith(".svg"):
+        bokeh_plot = hv.render(plot)
+        # show(bokeh_plot) has points in plot, svg plot does not
+        bokeh_plot.output_backend = "svg"
+        export_svg(bokeh_plot, filename=plotfile)
+    elif plotfile.endswith(".pdf"):
+        if _have_svg2pdf:
+            fig = hv.render(plot)
+            fig.output_backend = "svg"
+            export_svgs(fig, filename='tmp.svg')
+            svg2pdf(url="tmp.svg", write_to=plotfile)
+            os.system("rm tmp.svg")
+        else:
+            raise RuntimeError("Could not import cairosvg for PDF export")
+    else:
+        raise ValueError("Invalid output file extension type.  Must be png, svg or pdf")
+
 def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True):
     """Plot visibility axes and show interactive plot or export to file.
 
@@ -263,7 +285,7 @@ def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True)
         VISIBILITIES and FLAGS
             amp, phase, real, imag, weight, wtxamp, wtsp, sigma, sigmasp, flag
         OBSERVATIONAL GEOMETRY
-            u, v, w, uvdist, uwave, vwave, wwave, (uvwave),
+            u, v, w, uvdist, uwave, vwave, wwave, uvwave,
             (azimuth), (elevation), (hourang), (parang)
         ANTENNA-BASED GEOMETRY
             (antenna), (ant-az), (ant-el), (ant-ra), (ant-dec), (ant-parang)
@@ -309,7 +331,7 @@ def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True)
                  'uwave': ('UVW', 'chan'),
                  'vwave': ('UVW', 'chan'),
                  'wwave': ('UVW', 'chan'),
-                 #'uvwave': ('UVW', 'chan'),
+                 'uvwave': ('UVW', 'chan'),
                  #'azimuth': '',
                  #'elevation': '',
                  #'hourang': '',
@@ -328,20 +350,16 @@ def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True)
     if yaxis not in axis_keys:
         raise RuntimeError("Invalid y-axis option: " + yaxis)
 
-    xkey = axis_keys[xaxis]
-    ykey = axis_keys[yaxis]
+    uvw = ['u', 'v', 'w']
+    is_uv_plot = xaxis in uvw and yaxis in uvw
 
     # Read ms into xarray dataset
     print("Reading MeasurementSet")
     ms_xds = read_ms(infile=vis)
 
     # Extra info for plotting certain axes
-    # Square plot for UV
-    uvw = ['u', 'v', 'w']
-    is_uv_plot = xaxis in uvw and yaxis in uvw
     plot_width = _PLOT_WIDTH
     plot_height = _PLOT_WIDTH if is_uv_plot else _PLOT_HEIGHT
-
     first_time = ms_xds.xds0.TIME.values[0]
     freq_frame, freq_unit, rest_freq = _get_freq_params(ms_xds, xaxis, yaxis)
 
@@ -354,6 +372,9 @@ def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True)
 
     xlabel = _add_axis_unit(xlabel, first_time, freq_frame)
     ylabel = _add_axis_unit(ylabel, first_time, freq_frame)
+
+    xkey = axis_keys[xaxis]
+    ykey = axis_keys[yaxis]
 
     nspw = ms_xds.dims['spw_ids']
     spw_ids = ms_xds.coords['spw_ids'].values
@@ -401,23 +422,4 @@ def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True)
         hvplot.show(layout, title='PlotMS', threaded=True)
 
     if plotfile != "":
-        print("Saving plot to", plotfile)
-
-        if plotfile.endswith(".png"):
-            hvplot.save(layout, plotfile)
-        elif plotfile.endswith(".svg"):
-            bokeh_plot = hv.render(layout)
-            # show(bokeh_plot) has points in plot, svg plot does not
-            bokeh_plot.output_backend = "svg"
-            export_svg(bokeh_plot, filename=plotfile)
-        elif plotfile.endswith(".pdf"):
-            if _have_svg2pdf:
-                fig = hv.render(layout)
-                fig.output_backend = "svg"
-                export_svgs(fig, filename='tmp.svg')
-                svg2pdf(url="tmp.svg", write_to=plotfile)
-                os.system("rm tmp.svg")
-            else:
-                raise RuntimeError("Could not import cairosvg for PDF export")
-        else:
-            raise ValueError("Invalid output file extension type.  Must be png, svg or pdf")
+        _save_plot(plotfile, layout)
