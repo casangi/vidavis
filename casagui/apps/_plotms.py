@@ -9,6 +9,7 @@ from datetime import datetime
 import holoviews as hv 
 import hvplot.pandas
 import numpy as np
+import panel as pn
 import xarray as xr
 from bokeh.io import export_svgs
 from bokeh.models.formatters import BasicTickFormatter, DatetimeTickFormatter
@@ -24,9 +25,8 @@ try:
 except ImportError:
     _have_svg2pdf = False
 
-# hvplot defaults
-_PLOT_WIDTH = 700
-_PLOT_HEIGHT = 300
+_PLOT_WIDTH = 800
+_PLOT_HEIGHT = 400
 
 def _get_freq_params(xds, xaxis, yaxis):
     # Return frequency parameters (frame, unit, rest frequency) from spw table
@@ -240,17 +240,22 @@ def _save_plot(plotfile, plot):
     print("Saving plot to", plotfile)
 
     if plotfile.endswith(".png"):
-        hvplot.save(plot, plotfile)
+        # hvplot adds HSpacers with stretch_width to hv.DynamicMap
+        # (datashader plot), producing very wide png with centered plot.
+        # Using workaround in https://github.com/holoviz/holoviews/issues/4489
+        #hvplot.save(plot, plotfile)
+        pn.pane.HoloViews(plot.options(toolbar=None)).save(plotfile)
     elif plotfile.endswith(".svg"):
+        # FIXME: svg plot has axes but no points; show(bokeh_plot) is ok
         bokeh_plot = hv.render(plot)
-        # show(bokeh_plot) has points in plot, svg plot does not
         bokeh_plot.output_backend = "svg"
-        export_svg(bokeh_plot, filename=plotfile)
+        export_svgs(bokeh_plot, filename=plotfile)
     elif plotfile.endswith(".pdf"):
         if _have_svg2pdf:
-            fig = hv.render(plot)
-            fig.output_backend = "svg"
-            export_svgs(fig, filename='tmp.svg')
+            # FIXME: svg plot has axes but no points; show(bokeh_plot) is ok
+            bokeh_plot = hv.render(plot)
+            bokeh_plot.output_backend = "svg"
+            export_svgs(bokeh_plot, filename='tmp.svg')
             svg2pdf(url="tmp.svg", write_to=plotfile)
             os.system("rm tmp.svg")
         else:
@@ -272,7 +277,7 @@ def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True)
     title (str):
         Title written along top of plot, default yaxis vs. xaxis
     plotfile (str):
-        Filename for exported plot
+        Filename for exported plot. Currently only .png supported.
     showplot (bool):
         Whether to show interactive plot in browser tab
 
@@ -368,7 +373,7 @@ def plotms(vis, xaxis='time', yaxis='amp', title="", plotfile="", showplot=True)
     ylabel, yformatter = _setup_axis(yaxis)
     if not title:
         msname = os.path.basename(vis)
-        title = msname + " " + ylabel + " vs. " +  xlabel
+        title = msname + "\n" + ylabel + " vs. " +  xlabel
 
     xlabel = _add_axis_unit(xlabel, first_time, freq_frame)
     ylabel = _add_axis_unit(ylabel, first_time, freq_frame)
