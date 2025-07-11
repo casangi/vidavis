@@ -53,10 +53,11 @@ def plot_ms_waterfall():
     # logging levels are 'debug', 'info' , 'warning', 'error', 'critical'
     msr = MsRaster(ms_path, log_level='info', show_gui=False)
 
-    # ProcessingSet selection using summary column name and value, or MeasurementSetXds coordinates.
+    # ProcessingSet selection using summary column name and value
     # For selection options: msr.summary()
     msr.select_ps(intents='OBSERVE_TARGET#ON_SOURCE')
-    msr.select_ms(antenna1='DA42_A050')
+    # For antenna selection options: msr.get_dimension_values('antenna1') or 'antenna2' or 'baseline'
+    msr.select_ms(antenna1='DA48_A046')
 
     # Demo waterfall plots with baseline iteration
     # Use title='ms' to label plots with ms name and baseline value

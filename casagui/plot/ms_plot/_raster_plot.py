@@ -55,8 +55,7 @@ class RasterPlot:
             data (xarray Dataset): selected dataset of MSv4 data to plot
             plot_inputs (dict): user inputs to plot.
         '''
-        data_group = plot_inputs['selection']['data_group_name'] if ('selection' in plot_inputs and 'data_group_name' in plot_inputs['selection']) \
-            else plot_inputs['auto_data_group']
+        data_group = plot_inputs['data_group']
         self._plot_params['data']['data_group'] = data_group
         self._plot_params['data']['correlated_data'] = get_correlated_data(data, data_group)
         self._plot_params['data']['aggregator'] = plot_inputs['aggregator']

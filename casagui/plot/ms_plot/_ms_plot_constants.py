@@ -1,5 +1,7 @@
 ''' Define constants used for plotting MeasurementSets '''
 
+TIME_FORMAT = "%d-%b-%Y %H:%M:%S"
+
 SPECTRUM_AXIS_OPTIONS = ['amp', 'real']
 UVW_AXIS_OPTIONS = ['u', 'v', 'w', 'uvdist']
 VIS_AXIS_OPTIONS = ['amp', 'phase', 'real', 'imag']

@@ -86,7 +86,7 @@ def plot_ms_raster():
     msr.save(filename)
 
     # ------------------------------------------------------------------
-    # Demo dimension combinations for x and y axis
+    # Demo dimension combinations for (x, y) axis
     axes = [
         ('baseline', 'time'),
         ('frequency', 'time'), 

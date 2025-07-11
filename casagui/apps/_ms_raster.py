@@ -91,23 +91,29 @@ class MsRaster(MsPlot):
             raise ValueError(f"{flagged_cmap} not in colormaps list: {cmaps}")
         self._raster_plot.set_style_params(unflagged_cmap, flagged_cmap, show_colorbar, show_flagged_colorbar)
 
-    def select_ps(self, query=None, string_exact_match=True, **kwargs):
+    def select_ps(self, string_exact_match=True, query=None, **kwargs):
         '''
-        Select a subset of ProcessingSet MeasurementSets using summary column names or data group name.
-
-        See summary() and data_groups() for options (use keyword "data_group_name").
+        Select a subset of ProcessingSet MeasurementSets using a Pandas query or summary column names and values.
+            string_exact_match (bool): whether to require exact matches for string and string list columns (default True) or partial matches (False).
+            query (str): a Pandas query string to apply additional filtering.
+            **kwargs (dict): keyword arguments representing summary column names and values.
+        See summary(data_group) and data_groups() for selection options. Use keyword 'data_group_name' for data group selection.
         Summary column names include 'name', 'intents', 'shape', 'polarization', 'scan_name', 'spw_name',
-            'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'.
+          'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'.
+        The selection is applied to the data within the MeasurementSets where applicable (polarization, scan_name, field_name)
+          string_exact_match=True, else the entire MS is selected.
+        Selections are cumulative until clear_selection() is called.
+        Raises exception with message if selection fails.
+
         For explanation and examples, see:
         https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
-        The selection will also be applied to the subset of MeasurementSets where needed.
-        Selections are cumulative until clear_selection() is called.
-        Raises exception with message if selection failed.
         '''
         if self._data and self._data.is_valid():
             try:
-                self._data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
                 self._plot_inputs['selection'] |= kwargs
+                if 'data_group_name' in kwargs:
+                    self._plot_inputs['data_group'] = kwargs['data_group_name']
+                self._data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
             except KeyError as ke:
                 error = f"ProcessingSet selection failed: {str(ke)}. Run clear_selection() to select original ProcessingSet."
                 raise KeyError(error) from ke
@@ -116,20 +122,24 @@ class MsRaster(MsPlot):
 
     def select_ms(self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
         '''
-        Select MeasurementSetXdt data group and dimensions.
-          Values may be a single value, a list, a slice, or anything supported by Pandas indexing.
+        Select MeasurementSet dimensions or data_group.
+          Values may be a single value, a list, or a slice.
           Data group may be selected with "data_group_name"; see data_groups() for options.
-          Dimensions may be selected with 'time', 'baseline' (visibilities), 'antenna_name' (spectrum),
-              'antenna1', 'antenna2', 'frequency', and 'polarization'; see get_dimension_values() for options.
-        For explanation and examples, see:
-        https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel
-        See https://xarray.pydata.org/en/stable/generated/xarray.Dataset.sel.html for parameter descriptions.
+          See get_dimension_values() for selection keywords and values.
+            Dimensions may be selected with 'time', 'baseline' (visibilities), 'antenna_name' (spectrum),
+              'antenna1', 'antenna2', 'frequency', and 'polarization'.
+            Time selection must be in string format 'dd-Mon-YYYY HH:MM:SS' as shown in get_dimension_values('time').
         Selections are cumulative until clear_selection() is called.
-        Raises exception with message if selection failed.
+        Raises exception with message if selection fails.
+
+        For explanation of parameters and examples, see:
+        https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel
         '''
         if self._data and self._data.is_valid():
             try:
                 self._data.select_ms(indexers=indexers, method=method, tolerance=tolerance, drop=drop, **indexers_kwargs)
+                if 'data_group_name' in indexers_kwargs:
+                    self._plot_inputs['data_group'] |= indexers_kwargs['data_group_name']
                 self._plot_inputs['selection'] |= indexers_kwargs
             except KeyError as ke:
                 error = f"MeasurementSet selection failed: {str(ke)}. Run clear_selection() to select original ProcessingSet."
@@ -317,7 +327,7 @@ class MsRaster(MsPlot):
     def _init_plot(self, plot_inputs):
         ''' Apply automatic selection '''
         # Remove previous auto selections
-        for key in ['dim_selection', 'auto_data_group', 'auto_spw']:
+        for key in ['dim_selection', 'auto_spw']:
             try:
                 del self._plot_inputs[key]
             except KeyError:
@@ -325,13 +335,13 @@ class MsRaster(MsPlot):
 
         # Automatically select data group and spw name if not user-selected
         auto_selection = {}
-        if 'selection' not in plot_inputs or 'data_group_name' not in plot_inputs['selection']:
+        if 'data_group' not in plot_inputs:
             auto_selection['data_group_name'] = 'base'
-            plot_inputs['auto_data_group'] = 'base'
+            plot_inputs['data_group'] = 'base'
         if 'selection' not in plot_inputs or 'spw_name' not in plot_inputs['selection']:
-            first_spw = self._data.get_first_spw()
+            first_spw = self._data.get_first_spw(plot_inputs['data_group'])
             auto_selection['spw_name'] = first_spw
-            plot_inputs['auto_spw'] = first_spw
+            plot_inputs['auto_spw'] = first_spw # do not add to user selection
 
         if auto_selection:
             # Do selection and save to plot inputs
@@ -356,8 +366,7 @@ class MsRaster(MsPlot):
                     color_limits = self._spw_color_limits[spw_name]
                 else:
                     # Select spw name and data group only, no dimensions
-                    data_group = self._plot_inputs['selection']['data_group_name'] if ('selection' in plot_inputs and 'data_group_name' in plot_inputs['selection']) \
-                        else self._plot_inputs['auto_data_group']
+                    data_group = self._plot_inputs['data_group']
                     spw_data_selection = {'spw_name': spw_name, 'data_group_name': data_group}
                     color_limits = self._calc_amp_color_limits(spw_data_selection)
                     self._spw_color_limits[spw_name] = color_limits

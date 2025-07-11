@@ -119,10 +119,10 @@ class MsData:
         self._log_no_ms()
         return None
 
-    def get_first_spw(self):
+    def get_first_spw(self, data_group='base'):
         ''' Returns name of first spw by id. '''
         if self._data_initialized:
-            return self._data.get_first_spw()
+            return self._data.get_first_spw(data_group)
         self._log_no_ms()
         return None
 
@@ -157,8 +157,9 @@ class MsData:
             self._data.clear_selection()
 
     def get_vis_stats(self, selection, vis_axis):
-        ''' Returns statistics (min, max, mean, std) for data selected by selection.
+        ''' Returns statistics (min, max, mean, std) for data in data group selected by selection.
                 selection (dict): fields and values to select
+                vis_axis (str): complex component to apply to data
         '''
         if self._data_initialized:
             return self._data.get_vis_stats(selection, vis_axis)
