@@ -326,10 +326,10 @@ def _add_multi_choice(ps_selection, names):
         ps_selection is a Column to which to add selectors.
     '''
     for name in names:
+        # For value or list
         ps_selection.append(
-            pn.widgets.MultiChoice(
+            pn.widgets.MultiSelect(
                 name=name,
-                placeholder='Select option(s) from list',
                 sizing_mode='stretch_width',
             )
         )

@@ -69,7 +69,7 @@ def select_ms(ps_xdt, logger, indexers=None, method=None, tolerance=None, drop=F
             selected_ps[name] = ms_xdt
 
     if len(selected_ps.keys()) == 0:
-        raise KeyError("Selection yielded no MeasurementSets in ProcessingSet.")
+        raise KeyError("MeasurementSet selection yielded empty ProcessingSet.")
 
     if selected_times:
         logger.debug("Selected times: %s", sorted(list(set(selected_times))))
