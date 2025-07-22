@@ -10,11 +10,10 @@ visibility and spectrum data.
 Infrastructure
 --------------
 
-Like :doc:`interactive_clean`, MsRaster utilizes the :xref:`bokeh`
-backend for plotting.  Bokeh has built-in plot tools allowing the user to zoom,
-pan, select regions, inspect data values, and save the plot. Additional
-libraries are used in MsRaster for data I/O, logging, plotting, and interactive
-dashboards:
+MsRaster utilizes the :xref:`bokeh` backend for the raster plots.  Bokeh
+provides built-in plot tools allowing the user to zoom, pan, select regions,
+inspect data values, and save the plot. Additional libraries are used in
+MsRaster for data I/O, logging, plotting, and interactive dashboards:
 
 .. list-table::
    :class: borderless
@@ -90,15 +89,11 @@ Requirements
 
 - Python 3.11 or greater
 
-- :xref:`xradio`
-
-  - optionally with `python-casacore <https://casacore.github.io/python-casacore/>`_
-    or `casatools <https://casadocs.readthedocs.io/en/stable/api/casatools.html>`_
-    to enable conversion from MSv2 to MSv4
-
-- `toolviper <https://github.com/casangi/toolviper>`_ (installed with XRADIO)
-
 - `graphviper <https://github.com/casangi/graphviper>`_
+
+- optionally :xref:`xradio` with `python-casacore <https://casacore.github.io/python-casacore/>`_
+  or `casatools <https://casadocs.readthedocs.io/en/stable/api/casatools.html>`_
+  to enable conversion from MSv2 to MSv4
 
 - :xref:`hvplot`
 
@@ -107,7 +102,6 @@ To save plots, additional packages are required:
 - `Selenium <https://github.com/seleniumhq/selenium>`_
 
 - geckodriver for firefox, or chromedriver for chromium
-
 
 .. _install_msraster:
 
@@ -124,9 +118,10 @@ installed::
 
 Install required packages::
 
-  pip install casagui xradio graphviper hvplot
+  pip install casagui graphviper hvplot
 
-To install **xradio** with **python-casacore** for MSv2 conversion::
+**xradio** and **toolviper** are installed as dependencies of **graphviper**. To
+install **xradio** with **python-casacore** for MSv2 conversion::
 
   pip install "xradio[python-casacore]"
 
@@ -205,9 +200,9 @@ more information on the MSv4 data format, see the XRADIO
 
 .. warning::
    MSv2 files will be converted to zarr using the xradio default partitioning:
-   **data_description (spectral window and polarization setup), observation
-   mode, and field**.  If the MSv2 to be converted has numerous fields, such as
-   a mosaic, it is best to
+   **data description** (spectral window and polarization setup), **observation
+   mode**, and **field**.  If the MSv2 to be converted has numerous fields, such
+   as a mosaic, it is best to
    `convert the MSv2 to zarr <https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.convert_msv2_to_processing_set>`_
    without field partitioning prior to using MsRaster.
 
@@ -245,7 +240,8 @@ a set of related visibility/spectrum data, uvw, flags, and weights. Use
 
 Use ``summary()`` to view ProcessingSetXdt metadata for a specified
 :xref:`data_groups` name, displayed in a tabular format.  These column names and
-values can be used to do selection for a plot::
+values can be used to do selection for a plot (see ``select_ps()`` in
+:ref:`select_data`)::
 
     >>> msr.summary(data_group='base', columns=None)
                         name                                                                            intents              shape polarization                        scan_name                         spw_name     field_name   source_name line_name                       field_coords  start_frequency  end_frequency  
@@ -278,22 +274,36 @@ the first MS is shown here)::
     field_coords: (fk5) 5h22m57.98s -36d27m30.85s
     frequency range: 3.725331e+11 - 3.727669e+11
 
-.. _antennas:
+.. _get_dimension_values:
 
-The ``antennas()`` function returns a list of antenna names, which can be used
-to select baseline, antenna1, or antenna2. This function has been combined with
-the :xref:`xradio` ProcessingSetXdt function to plot the antenna positions,
-optionally labeled by name:
+To explore the values in each data dimension, use ``get_dimension_values(dim)``
+with dimension options 'time', 'baseline', 'antenna1', 'antenna2', 'frequency',
+and 'polarization'. The list of values returned can be used to select data in
+the MeasurementSets (see ``select_ms()`` in :ref:`select_data`)::
 
-    >>> antenna_names = msr.antennas(plot_positions=False, label_antennas=False)
-    >>> print(antenna_names)
-    ['DA42_A050', 'DA44_A068', 'DA45_A070', 'DA46_A067', 'DA48_A046', 'DA49_A029', 'DA50_A045',
-    'DV02_A077', 'DV05_A082', 'DV06_A037', 'DV08_A021', 'DV10_A071', 'DV13_A072', 'DV15_A074',
-    'DV16_A069', 'DV17_A138', 'DV18_A053', 'DV19_A008', 'DV20_A020', 'DV22_A011', 'DV23_A007']
+    >>> msr.get_dimension_values('polarization')
+    ['XX', 'YY']
 
-When plotting antenna positions with ``label_antennas=False``, the antenna
-names can be shown by hovering over the antenna position. Sample antenna plot
-with ``label_antennas=True``:
+When the data has been previously selected, the returned values will be for the
+dimension in the selected ProcessingSet.  Use ``clear_selection()`` to see all
+values in the original ProcessingSet.
+
+The ``time`` dimension is returned as datetime strings in the format
+``dd-Mon-YYYY HH:MM:SS``.  Use this format to select time in ``select_ms()``.
+
+The ``baseline`` dimension is returned as strings in the format ``ant1 & ant2``.
+Use this format to selection baseline in ``select_ms()``.
+
+.. _plot_antennas:
+
+MsRaster includes the :xref:`xradio` ProcessingSetXdt function to plot antenna
+positions, optionally labeled by name::
+
+    >>> msr.plot_antennas(label_antennas=False)
+
+When plotting antenna positions with ``label_antennas=False`` (default), the
+antenna names can be shown by hovering over the antenna position. Sample antenna
+plot with ``label_antennas=True``:
 
 .. image:: _static/antenna_positions.png
 
@@ -310,7 +320,6 @@ with ``label_fields=True``:
 
 .. image:: _static/phase_centers.png
 
-
 .. _style_plot:
 
 Style Raster Plots
@@ -324,8 +333,7 @@ settings will then be used for all plots for the MsRaster object::
     >>> msr.set_style_params(unflagged_cmap='Viridis', flagged_cmap='Reds', show_colorbar=True,
     show_flagged_colorbar=True)
 
-Use ``colormaps()`` to get the list of available colormaps, which are the
-same ones used in :doc:`interactive_clean`::
+Use ``colormaps()`` to get the list of available colormaps::
 
     >>> msr.colormaps()
     ['Blues', 'Cividis', 'Greens', 'Greys', 'Inferno', 'Magma', 'Oranges', 'Plasma', 'Purples',
@@ -335,66 +343,91 @@ It is expected that in the future, additional style settings will be available,
 such as fonts for plot labels. It is also possible that in the future these
 settings will be able to be saved in a config.py file.
 
-.. _create_plot:
+.. _select_data:
 
-Create Raster Plot
+Select Raster Data
 ``````````````````
 
-Use ``plot()`` to create each raster plot, which can then be shown (see :ref:`show_plot`) or saved (see :ref:`save_plot`)::
+MsRaster has two ways to select data: ``select_ps()`` to select a subset of
+ProcessingSet MeasurementSets, and ``select_ms()`` to select data in the
+MeasurementSets.  Use either method to select one of the available data groups
+using keyword ``data_group_name`` (see :ref:`data_groups <data_groups>`).
 
-    >>> msr.plot(x_axis='baseline', y_axis='time', vis_axis='amp', selection=None,
-    aggregator=None, agg_axis=None, iter_axis=None, iter_range=None, subplots=None,
-    color_mode=None, color_range=None, title=None, clear_plots=True)
+``select_ps()`` is based on the ProcessingSet :ref:`summary <summary>`. Since
+the summary is a Pandas dataframe, a Pandas ``query`` string may be used to
+filter the MeasurementSets included in a ProcessingSet. Keyword arguments
+using ``data_group_name`` and summary column names may be used to select the
+ProcessingSet::
 
-* ``x_axis`` and ``y_axis`` (str): select the axes to plot from the data
-  dimensions **'time', 'baseline'** (**'antenna_name'** for spectrum data),
-  **'frequency',** and **'polarization'**. For spectrum data, **'baseline'** is
-  equivalent to **'antenna_name'** since it is the default ``x_axis``.
-    * Default x_axis: **baseline**
-    * Default y_axis: **time**
+    >>> msr.select_ps(query='start_frequency > 100e9 AND end_frequency < 200e9')
+    >>> msr.select_ps(field_name='TW Hya_5', scan_name='16', polarization='XX')
 
-* ``vis_axis`` (str): The complex component of the visibility data has options
-  **'amp', 'phase', 'real',** and **'imag'**. For spectrum data, only **'amp'**
-  and **'real'** are valid, with **'amp'** equivalent to **'real'** since it is
-  the default ``vis_axis``.
-    * Default vis_axis: **amp**
+The keyword arguments may also be passed as a Python dictionary::
 
-* ``selection`` (None, dict): select data using a dictionary of keyword/value
-  pairs. Selections may be made from the :xref:`xradio`
-  ProcessingSetXdt or MSv4 by **value**:
+    >>> ps_selection = {'field_name': 'TW Hya_5', 'scan_name': '16', 'polarization': 'XX'}
+    >>> msr.select_ps(**ps_selection)
 
-  * **ProcessingSetXdt**: use the summary column names as keys and the column
-    value(s) as valid options (see :ref:`summary() <summary>`). Since the
-    ProcessingSetXdt summary is a `Pandas <https://pandas.pydata.org/>`_
-    DataFrame, selection can also be done as a Pandas query with keyword
-    ``'query'``. The :xref:`data_groups` name for correlated data may also be
-    selected (see :ref:`data_groups() <data_groups>`). Some selections will be
-    made automatically if not user-selected (see note below). Example selections:
+The keyword values may be a single value as shown above, or a list of values::
 
-    * selection = {'data_group': 'corrected', 'intents': 'OBSERVE_TARGET#ON_SOURCE',
-      'field_name': 'TW Hya_5'}
-    * selection = {'query': 'field_name=["3c279_6", "TW Hya_5"], scan_name=["33", "36"]'}
-    * selection = {'query': 'start_frequency > 100e9 AND end_frequency < 200e9'}
- 
-  * **MSv4**: select the data dimensions.  Some selections will be made
-    automatically if not user-selected (see note below):
+    >>> msr.select_ps(scan_name=['16', '18', '20'])
 
-    * ``'time'``: ???
-    * ``'frequency'``: ???
-    * ``'baseline'``, ``'antenna1'`` and ``antenna2'``: select antenna names or
-      baselines as 'ant1_name & ant2_name' (see :ref:`antennas() <antennas>`).
-    * ``'polarization'``: use *summary(columns='polarization')* for valid
-      options (see :ref:`summary() <summary>`).
+With ProcessingSet selection, the option for an exact string match (default) or a
+partial string match for string values is available using the
+``string_exact_match`` parameter::
 
-  * Default selection: None (use automatic selection). 
+    >>> msr.select_ps(string_exact_match=False, query=None, intents='CALIBRATE_BANDPASS')
+    >>> msr.select_ps(string_exact_match=False, query=None, field_name='Venus')
+
+Note the ProcessingSet selection is **not** applied to the data **in** the
+MeasurementSets, unless ``exact_string_match=True`` and the column name is
+``polarization``, ``scan_name``, or ``field_name``.
+
+For additional explanation and examples, see also `ProcessingSetXdt.query() 
+<https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query>`_.
+
+``select_ms()`` is based on the MeasurementSet dimensions. Keyword arguments
+include ``data_group_name`` and dimensions ``time``, ``baseline``
+(visibilities), ``antenna_name`` (spectrum), ``frequency``, and ``polarization``.
+Use :ref:`get_dimension_values <get_dimension_values>` for a list of dimension
+values to select. A set of baselines may also be selected with the more general
+``antenna1`` and ``antenna2`` keywords::
+
+    >>> msr.select_ms(antenna1='DA44_A068')
+
+Since the data in a MeasurementSet is a :xref:`xarray` Dataset, the parameters
+for Dataset ``sel()`` are available in ``select_ms()``, such as ``method`` and
+``tolerance`` for selecting numeric values. Here, the nearest frequency value
+within 100 MHz of 372.6 GHz is selected::
+
+    >>> msr.select_ms(frequency=3.726e+11, method='nearest', tolerance=1e+8)
+
+Values may be a single value, a list, or a slice. Time selection must be in
+string format 'dd-Mon-YYYY HH:MM:SS' as shown in
+``get_dimension_values('time')``::
+
+    >>> msr.select_ms(polarization=['XX', 'YY']
+    >>> msr.select_ms(time=slice('19-Nov-2012 09:00:00', '19-Nov-2012 09:12:00'))
+
+For additional explanation and examples, see `MeasurementSetXdt.sel() 
+<https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel>`_.
+
+.. warning::
+   All selections using ``select_ps()`` and ``select_ms()`` are cumulative, with
+   each selection acting on the previously-selected ProcessingSet and
+   MeasurementSets.
+
+To clear previous selections and return to the original ProcessingSet, simply
+run ``clear_selection()``::
+
+    >>> msr.clear_selection()
 
 .. note::
-  * **Automatic selection**: Since MsRaster creates a 2D plot from 4D data, some
-    selections must be done automatically if not selected by the user. These
-    selections include:
+  **Automatic selection**: Since MsRaster creates a 2D plot from 4D data, some
+  selections must be done automatically if not selected by the user. These
+  selections include:
 
     * **spw_name**: for consistent data shapes, the first spectral window (by
-      spectral_window_id) is selected.
+      time) is selected.
     * **data_group**: default 'base'.
     * **data dimensions**:  the dimensions not chosen for ``x_axis``,
       ``y_axis``, aggregation ``agg_axis`` or iteration ``iter_axis`` are
@@ -407,13 +440,41 @@ Use ``plot()`` to create each raster plot, which can then be shown (see :ref:`sh
       values, sorted, and the first in the list is selected and converted back
       to a name for value selection.
 
+.. _create_plot:
+
+Create Raster Plot
+``````````````````
+
+Use ``plot()`` to create each raster plot, which can then be shown (see
+:ref:`show_plot`) or saved (see :ref:`save_plot`)::
+
+    >>> msr.plot(x_axis='baseline', y_axis='time', vis_axis='amp', aggregator=None,
+    agg_axis=None, iter_axis=None, iter_range=None, subplots=None, color_mode=None,
+    color_range=None, title=None, clear_plots=True)
+
+* ``x_axis`` and ``y_axis`` (str): select the axes to plot from the data
+  dimensions **'time', 'baseline'** (**'antenna_name'** for spectrum data),
+  **'frequency',** and **'polarization'**. For spectrum data, **'baseline'** is
+  equivalent to **'antenna_name'** since it is the default ``x_axis``.
+
+  * Default x_axis: baseline
+  * Default y_axis: time
+
+* ``vis_axis`` (str): The complex component of the visibility data has options
+  **'amp', 'phase', 'real',** and **'imag'**. For spectrum data, only **'amp'**
+  and **'real'** are valid, with **'amp'** equivalent to **'real'** since it is
+  the default ``vis_axis``.
+
+  * Default vis_axis: amp
+
 * ``aggregator`` (None, str): the reduction function to apply along the
   ``agg_axis`` dimension(s) of all correlated data in the data group
   (VISIBILITY/SPECTRUM, WEIGHT, and FLAG). Aggregator options include **'max',
   'mean', 'min', 'std', 'sum'**, and **'var'**. The reduction is applied after
-  the ``vis_axis`` component is applied. Flags and weights are not used in the
-  aggregation but are aggregated.
-    * Default aggregator: None
+  the ``vis_axis`` component is calculated. Flags and weights are not used in
+  the aggregation but are aggregated.
+
+  * Default aggregator: None
 
 * ``agg_axis`` (None, str, list): which dimension(s) to apply the ``aggregator``
   across. Cannot include ``x_axis`` or ``y_axis``. Ignored if
@@ -421,51 +482,60 @@ Use ``plot()`` to create each raster plot, which can then be shown (see :ref:`sh
   single dimension, the remaining dimension is selected automatically as
   described above. If ``agg_axis=None``, *all* remaining dimensions are
   aggregated.
-    * Default agg_axis: None
+
+  * Default agg_axis: None
 
 * ``iter_axis`` (None, str): dimension along which to iterate to create multiple
   plots. Cannot be ``x_axis`` or ``y_axis``. Select the iteration index range
   with ``iter_range``.
-    * Default iter_axis: None
+
+  * Default iter_axis: None
 
 * ``iter_range`` (None, tuple): (start, end) inclusive index values for creating
   iteration plots. Use (0, -1) for all iterations.  Warning: you may trigger a
   MemoryError with many iterations.  Iterated plots can be shown or saved in a
   grid (see ``subplots``) or saved individually (see :ref:`save_plot`).
-    * Default iter_range: None (equivalent to (0, 0), first iteration only)
 
-* ``subplots`` (None, tuple): set a plot layout of (rows, columns). Use with
-  ``iter_axis`` and ``iter_range``, or ``clear_plots=False``.  If the layout
-  size is less than the number of plots, ``subplots`` will limit the plots in
-  the layout. Similarly, if  the number of plots is less than the ``subplots``
-  size, the plots will appear in the layout according to the number of columns
-  but fewer rows. The last ``subplots`` setting will be used in :ref:`show_plot`
-  and :ref:`save_plot`.
-    * Default subplots: None (single plot, equivalent to (1, 1))
+  * Default iter_range: None (equivalent to (0, 0), first iteration only)
+
+* ``subplots`` (None, tuple): set a plot layout of (rows, columns). Use when
+  multiple plots are created with ``iter_axis`` and ``iter_range`` or with
+  ``clear_plots=False``.  If the layout size is less than the number of plots,
+  ``subplots`` will limit the plots shown in the layout. Similarly, if the
+  number of plots is less than the ``subplots`` size, the plots will appear in
+  the layout according to the number of columns but fewer or incomplete rows.
+  When multiple plots are created with ``clear_plots=False``, the **last**
+  ``subplots`` setting will be used for the layout.
+
+  * Default subplots: None (single plot, equivalent to (1, 1))
 
 * ``color_mode`` (None, str): Whether to limit the colorbar range. Options
   include **None** (use data limits), **'auto'** (calculate limits for
   amplitude), and **'manual'** (use ``color_range``). **'auto'** is equivalent
   to None if ``vis_axis`` is not **'amp'**.  **'manual'** is equivalent to None
   if ``color_range=None``. Automatic limits for amplitudes are calculated from
-  statistics for the unflagged data in the spectral window, which use 
+  statistics for the unflagged data in the spectral window, which uses 
   :xref:`graphviper` MapReduce for fast computation. The range is clipped to
   3-sigma limits to brighten weaker data values.
-    * Default color_mode: None (use data limits)
+
+  * Default color_mode: None (use data limits)
 
 * ``color_range`` (None, tuple): (min, max) of colorbar to use if
   ``color_mode='manual'``, else ignored.
-    * Default color_range: None (use data limits)
+
+  * Default color_range: None (use data limits)
 
 * ``title`` (None, str): Plot title. Options include None, **'ms'** to generate
   a title from the ``ms`` name appended with ``iter_axis`` value (if any), or a
   custom title string.
-    * Default title: None (no plot title).
+
+  * Default title: None (no plot title).
 
 * ``clear_plots`` (bool): whether to clear the list of previous plot(s). Set to
   False to create multiple plots and show them in a layout with ``subplots``.
   This option is not currently available in the interactive GUI.
-    * Default clear_plots: True (remove previous plots)
+
+  * Default clear_plots: True (remove previous plots)
 
 **Examples**:
 
@@ -501,7 +571,7 @@ Use ``plot()`` to create each raster plot, which can then be shown (see :ref:`sh
   colorbar range:
 
     >>> msr.plot(x_axis='frequency', y_axis='time', vis_axis='amp', aggregator='max',
-    agg_axis='baseline', iter_axis='polarization, iter_range=(0, -1), subplots=(2, 2),
+    agg_axis='baseline', iter_axis='polarization', iter_range=(0, -1), subplots=(2, 2),
     color_mode='auto')
 
 .. _show_plot:
@@ -519,8 +589,8 @@ a ``subplots`` layout, the plots are connected so that the Bokeh plot tools such
 as pan and zoom act on all plots in the layout.
 
 To show the plot, :xref:`holoviews` renders the plot to a :xref:`bokeh` figure,
-then Bokeh show() saves the plot to an HTML file in a temporary directory and
-automatically opens the file in the browser.
+then Bokeh ``show()`` saves the plot to an HTML file in a temporary directory
+and automatically opens the file in the browser.
 
 .. _save_plot:
 
@@ -606,10 +676,16 @@ MsRaster plot parameters:
   * **Plot style**: ``unflagged_cmap``, ``flagged_cmap``, ``show_colorbar``,
     ``show_flagged_colorbar``
 
+* :ref:`select_data` parameters:
+
+  * **Selection**:
+
+    * **Select ProcessingSet**: query, summary column names
+    * **Select MeasurementSet**: data group, dimensions, antenna1 and antenna2
+
 * :ref:`create_plot` parameters:
 
   * **Plot axes**: ``x_axis``, ``y_axis``, ``vis_axis``
-  * **Selection**: ``selection``
   * **Aggregation**: ``aggregator``, ``agg_axis``
   * **Iteration**: ``iter_axis``, ``iter_range``, ``subplots``
   * **Plot title**: ``title``
@@ -618,6 +694,5 @@ MsRaster plot parameters:
 inputs change. Click ``Plot`` to render the plot.
 
 .. note::
-   Iterated plots in a layout will be shown in a Bokeh plot in a **new browser
-   tab**. There is currently no way to create multiple plots in the GUI except
-   by iteration.
+   The only way to create multiple plots in the GUI is by iteration. Iterated
+   plots in a layout will be shown in a Bokeh plot in a **new browser tab**.

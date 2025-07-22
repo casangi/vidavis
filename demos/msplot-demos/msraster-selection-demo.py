@@ -65,8 +65,11 @@ def select_processing_set(msr):
     msr.plot()
     msr.show()
 
-    # Select summary value with dict
+    # Selections are cumulative.
+    # Clear selection each time to start with unselected PS.
     msr.clear_selection()
+
+    # Select summary value with dict
     intent_selection = {'intents': 'OBSERVE_TARGET#ON_SOURCE'}
     msr.select_ps(**intent_selection)
     msr.plot()
