@@ -4,6 +4,7 @@
 
 from casagui.data.measurement_set.processing_set._ps_data import PsData
 
+#pylint: disable=too-many-public-methods
 class MsData:
     '''
     Access and select MeasurementSet data.
@@ -26,12 +27,10 @@ class MsData:
         return path == self.get_path() or path == self._ms_path
 
     def get_path(self):
-        ''' Returns path of MS/zarr file or None if not set. '''
+        ''' Returns path of zarr file, MS file, or None if not set. '''
         if self._data_initialized:
             return self._data.get_path() # path to zarr file
-        if self._ms_path:
-            return self._ms_path # path to ms v2
-        return None
+        return self._ms_path # path to ms v2
 
     def summary(self, data_group='base', columns=None):
         ''' Print summary of Processing Set data.
@@ -48,7 +47,7 @@ class MsData:
         else:
             self._log_no_ms()
 
-    def get_ps_summary(self):
+    def get_summary(self):
         ''' Return Pandas DataFrame summary of ProcessingSet '''
         if self._data_initialized:
             return self._data.get_summary()
@@ -57,29 +56,25 @@ class MsData:
 
     def data_groups(self):
         ''' Returns set of data group names in Processing Set data. '''
-        # ProcessingSet function
         if self._data_initialized:
             return self._data.get_data_groups()
         self._log_no_ms()
         return None
 
-    def get_antennas(self, plot_positions=False, label_antennas=False):
-        ''' Returns list of antenna names in data.
-                plot_positions (bool): show plot of antenna positions.
+    def plot_antennas(self, label_antennas=False):
+        ''' Plot antenna positions.
                 label_antennas (bool): label positions with antenna names.
         '''
-        # Antenna positions plot is ProcessingSet function
         if self._data_initialized:
-            return self._data.get_antennas(plot_positions, label_antennas)
-        self._log_no_ms()
-        return None
+            self._data.plot_antennas(label_antennas)
+        else:
+            self._log_no_ms()
 
     def plot_phase_centers(self, data_group='base', label_all_fields=False):
         ''' Plot the phase center locations of all fields in the Processing Set (original or selected) and label central field.
                 label_all_fields (bool); label all fields on the plot
                 data_group (str); data group to use for processing.
         '''
-        # ProcessingSet function
         if self._data_initialized:
             self._data.plot_phase_centers(label_all_fields, data_group)
         else:
@@ -107,7 +102,7 @@ class MsData:
         return None
 
     def get_dimension_values(self, dim):
-        ''' Return values for dimension in current data.
+        ''' Returns values for dimension in current data.
                 dim (str): dimension name
         '''
         if self._data_initialized:
@@ -116,7 +111,7 @@ class MsData:
         return None
 
     def get_dimension_attrs(self, dim):
-        ''' Return dict of data attributes for dimension.
+        ''' Returns dict of data attributes for dimension.
                 dim (str): dimension name
         '''
         if self._data_initialized:
@@ -124,19 +119,35 @@ class MsData:
         self._log_no_ms()
         return None
 
-    def get_first_spw(self):
+    def get_first_spw(self, data_group='base'):
         ''' Returns name of first spw by id. '''
         if self._data_initialized:
-            return self._data.get_first_spw()
+            return self._data.get_first_spw(data_group)
         self._log_no_ms()
         return None
 
-    def select_data(self, selection):
-        ''' Apply selection in data.
-                selection (dict): fields and values to select
+    def select_ps(self, query=None, string_exact_match=True, **kwargs):
+        ''' Apply data group and summary column selection to ProcessingSet. See ProcessingSetXdt query().
+            https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
+            Selections are cumulative until clear_selection() is called.
+            Saves selected ProcessingSet internally.
+            Throws exception if selection fails.
         '''
         if self._data_initialized:
-            self._data.select_data(selection)
+            self._data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
+        else:
+            self._log_no_ms()
+
+    def select_ms(self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
+        ''' Apply dimension and data group selection to MeasurementSet. See MeasurementsSetXdt sel().
+            https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel.
+            Additional supported selection besides dimensions include "baseline", "antenna1", "antenna2".
+            Selections are cumulative until clear_selection() is called.
+            Saves selected ProcessingSet internally.
+            Throws exception if selection fails.
+        '''
+        if self._data_initialized:
+            self._data.select_ms(indexers, method, tolerance, drop, **indexers_kwargs)
         else:
             self._log_no_ms()
 
@@ -146,8 +157,9 @@ class MsData:
             self._data.clear_selection()
 
     def get_vis_stats(self, selection, vis_axis):
-        ''' Returns statistics (min, max, mean, std) for data selected by selection.
+        ''' Returns statistics (min, max, mean, std) for data in data group selected by selection.
                 selection (dict): fields and values to select
+                vis_axis (str): complex component to apply to data
         '''
         if self._data_initialized:
             return self._data.get_vis_stats(selection, vis_axis)
@@ -169,6 +181,7 @@ class MsData:
         return None
 
     def _log_no_ms(self):
+        ''' Standardized log message when path has not been set. '''
         self._logger.info("No MS path set, cannot access data")
 
     def _init_data(self, ms_path):
@@ -176,3 +189,4 @@ class MsData:
         if ms_path:
             self._data = PsData(ms_path, self._logger)
             self._data_initialized = True
+#pylint: enable=too-many-public-methods

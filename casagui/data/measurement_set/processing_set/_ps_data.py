@@ -8,7 +8,8 @@ import pandas as pd
 try:
     from casagui.data.measurement_set.processing_set._ps_io import get_processing_set
     _HAVE_XRADIO = True
-    from casagui.data.measurement_set.processing_set._ps_select import select_ps
+    from casagui.plot.ms_plot._ms_plot_constants import TIME_FORMAT
+    from casagui.data.measurement_set.processing_set._ps_select import select_ps, select_ms
     from casagui.data.measurement_set.processing_set._ps_stats import calculate_ps_stats
     from casagui.data.measurement_set.processing_set._ps_raster_data import raster_data
     from casagui.data.measurement_set.processing_set._xds_data import get_correlated_data
@@ -42,7 +43,7 @@ class PsData:
 
     def summary(self, data_group='base', columns=None):
         ''' Print full or selected summary of Processing Set metadata, optionally by ms '''
-        ps_summary = self._ps_xdt.xr_ps.summary(data_group=data_group)
+        ps_summary = self.get_summary(data_group)
         pd.set_option("display.max_rows", len(self._ps_xdt))
         pd.set_option("display.max_columns", len(ps_summary.columns))
         pd.set_option("display.max_colwidth", None)
@@ -75,9 +76,9 @@ class PsData:
             col_df = ps_summary[columns]
             print(col_df)
 
-    def get_summary(self):
+    def get_summary(self, data_group='base'):
         ''' Return summary of original ps '''
-        return self._ps_xdt.xr_ps.summary()
+        return self._ps_xdt.xr_ps.summary(data_group)
 
     def get_data_groups(self):
         ''' Returns set of data group names in Processing Set data. '''
@@ -86,14 +87,11 @@ class PsData:
             data_groups.extend(list(self._ps_xdt[ms_xdt_name].data_groups))
         return set(data_groups)
 
-    def get_antennas(self, plot_positions=False, label_antennas=False):
-        ''' Returns list of antenna names in ProcessingSet antenna_xds.
-                plot_positions (bool): show plot of antenna positions.
+    def plot_antennas(self, label_antennas=False):
+        ''' Plot antenna positions.
                 label_antennas (bool): label positions with antenna names.
         '''
-        if plot_positions:
-            self._ps_xdt.xr_ps.plot_antenna_positions(label_antennas)
-        return self._ps_xdt.xr_ps.get_combined_antenna_xds().antenna_name.values.tolist()
+        self._ps_xdt.xr_ps.plot_antenna_positions(label_antennas)
 
     def plot_phase_centers(self, label_all_fields=False, data_group='base'):
         ''' Plot the phase center locations of all fields in the Processing Set (original or selected) and label central field.
@@ -112,74 +110,100 @@ class PsData:
         return ps_xdt.xr_ps.get_max_dims()
 
     def get_data_dimensions(self):
-        ''' Return the maximum dimensions in selected ps_xdt (if selected) '''
+        ''' Return the maximum dimensions in selected ProcessingSet (if selected) '''
         dims = list(self.get_max_dims().keys())
         if 'uvw_label' in dims:
             dims.remove('uvw_label') # not a VISIBILITY/SPECTRUM data dim
         return dims
 
     def get_dimension_values(self, dimension):
-        ''' Return sorted list of unique values for input dimension in ProcessingSet. '''
+        ''' Return sorted list of unique values for input dimension in selected ProcessingSet.
+            For 'time', returns datetime strings.
+        '''
         ps_xdt = self._get_ps_xdt()
         dim_values = []
-        for ms_xdt in ps_xdt.values():
-            if dimension == 'baseline':
-                ant1_names = ms_xdt.baseline_antenna1_name.values
-                ant2_names = ms_xdt.baseline_antenna2_name.values
-                for baseline_id in ms_xdt.baseline_id:
-                    dim_values.append(f"{ant1_names[baseline_id]} & {ant2_names[baseline_id]}")
-            else:
+
+        if dimension == 'time':
+            dim_values = self._get_time_strings(ps_xdt)
+        elif dimension == 'baseline':
+            dim_values = self._get_baselines(ps_xdt)
+        else:
+            if dimension == 'antenna1':
+                dimension = 'baseline_antenna1_name'
+            elif dimension == 'antenna2':
+                dimension = 'baseline_antenna2_name'
+            for ms_xdt in ps_xdt.values():
                 try:
                     dim_values.extend([value.item() for value in ms_xdt[dimension].values])
                 except TypeError:
                     dim_values.append(ms_xdt[dimension].values.item())
+
         return sorted(set(dim_values))
+
+    def _get_time_strings(self, ps):
+        ''' Return time values as string not float '''
+        times = []
+        for ms_xdt in ps.values():
+            time_xda = ms_xdt.time
+            time_attrs = time_xda.attrs
+            date_strings = pd.to_datetime(time_xda, unit=time_attrs['units'][0], origin=time_attrs['format']).strftime(TIME_FORMAT).values
+            times.extend(date_strings.tolist())
+        return times
+
+    def _get_baselines(self, ps):
+        ''' Return baseline strings as ant1_name & ant2_name '''
+        baselines = []
+        for ms_xdt in ps.values():
+            ant1_names = ms_xdt.baseline_antenna1_name.values
+            ant2_names = ms_xdt.baseline_antenna2_name.values
+            for ant1, ant2 in zip(ant1_names, ant2_names):
+                baselines.append(f"{ant1} & {ant2}")
+        return baselines
 
     def get_dimension_attrs(self, dim):
         ''' Return attributes dict for input dimension in ProcessingSet. '''
         ps_xdt = self._get_ps_xdt()
         return ps_xdt.get(0)[dim].attrs
 
-    def get_first_spw(self):
-        ''' Return first spw name by id '''
-        spw_id_names = {}
+    def get_first_spw(self, data_group='base'):
+        ''' Return first spw name in selected ps summary '''
+        spw_names = self.get_summary(data_group)['spw_name']
+        return spw_names[0]
+
+    def select_ps(self, query=None, string_exact_match=True, **kwargs):
+        ''' Apply data group and summary column selection to ProcessingSet. See ProcessingSetXdt query().
+            https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
+            Also applies selection to ms_xdt in ps.
+            Selections are cumulative until clear_selection() is called.
+            Saves selected ProcessingSet internally.
+            Throws exception if selection fails.
+        '''
         ps_xdt = self._get_ps_xdt()
-        for ms_xdt in ps_xdt.values():
-            freq_xds = ms_xdt.frequency
-            spw_id_names[freq_xds.spectral_window_id] = freq_xds.spectral_window_name
+        self._selected_ps_xdt = select_ps(ps_xdt, self._logger, query=query, string_exact_match=string_exact_match, **kwargs)
 
-        first_spw_id = min(spw_id_names)
-        first_spw_name = spw_id_names[first_spw_id]
-
-        summary = self.get_summary()
-        spw_df = summary[summary['spw_name'] == first_spw_name]
-        start_freq = spw_df.at[spw_df.index[0], 'start_frequency']
-        end_freq = spw_df.at[spw_df.index[0], 'end_frequency']
-        self._logger.info(f"Selecting first spw {first_spw_name} (id {first_spw_id}) with frequency range {start_freq:e} - {end_freq:e}")
-        return first_spw_name
-
-    def select_data(self, selection):
-        ''' Apply selection dict to ProcessingSet to create selected ps_xdt.
-            If previous selection done, apply to selected ps_xdt.
-            Add selection to previous selections. '''
+    def select_ms(self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
+        ''' Apply dimension and data group selection to MeasurementSet. See MeasurementsSetXdt sel().
+            https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel.
+            Additional supported selection besides dimensions include "baseline", "antenna1", "antenna2".
+            Selections are cumulative until clear_selection() is called.
+            Saves selected ProcessingSet internally.
+            Throws exception if selection fails.
+        '''
         ps_xdt = self._get_ps_xdt()
-        self._selected_ps_xdt = select_ps(ps_xdt, selection, self._logger)
-        if self._selection:
-            self._selection |= selection
-        else:
-            self._selection = selection
+        self._selected_ps_xdt = select_ms(ps_xdt, self._logger, indexers, method, tolerance, drop, **indexers_kwargs)
 
     def clear_selection(self):
         ''' Clear previous selections and use original ps_xdt '''
-        self._selection = None
         self._selected_ps_xdt = None
 
-    def get_vis_stats(self, selection, vis_axis):
-        ''' Returns statistics (min, max, mean, std) for data selected by selection.
+    def get_vis_stats(self, ps_selection, vis_axis):
+        ''' Returns statistics (min, max, mean, std) for data in data group selected by selection.
+                data_group (str): correlated data to use for calculations
                 selection (dict): fields and values to select
+                vis_axis (str): complex component to apply to data
         '''
-        stats_ps_xdt = select_ps(self._ps_xdt, selection, self._logger)
-        data_group = selection['data_group'] if 'data_group' in selection else 'base'
+        stats_ps_xdt = select_ps(self._ps_xdt, self._logger, query=None, string_exact_match=True, **ps_selection)
+        data_group = ps_selection['data_group_name'] if 'data_group_name' in ps_selection else 'base'
         return calculate_ps_stats(stats_ps_xdt, self._zarr_path, vis_axis, data_group, self._logger)
 
     def get_correlated_data(self, data_group):

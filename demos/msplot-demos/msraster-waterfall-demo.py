@@ -51,17 +51,17 @@ def plot_ms_waterfall():
 
     # Converts ms to zarr, and gets xradio ProcessingSet.
     # logging levels are 'debug', 'info' , 'warning', 'error', 'critical'
-    msr = MsRaster(ms_path, log_level='debug', show_gui=False)
+    msr = MsRaster(ms_path, log_level='info', show_gui=False)
 
-    # ProcessingSet selection using summary column name and value, or MeasurementSetXds coordinates.
+    # ProcessingSet selection using summary column name and value
     # For selection options: msr.summary()
-    selection = {
-        'intents': ['OBSERVE_TARGET#ON_SOURCE'],
-        'antenna1': 'DA42_A050',
-    }
+    msr.select_ps(intents='OBSERVE_TARGET#ON_SOURCE')
+    # For antenna selection options: msr.get_dimension_values('antenna1') or 'antenna2' or 'baseline'
+    msr.select_ms(antenna1='DA48_A046')
 
     # Demo waterfall plots with baseline iteration
-    msr.plot(selection=selection, x_axis='frequency', iter_axis='baseline', iter_range=(0, 5), subplots=(2, 3), color_mode=None)
+    # Use title='ms' to label plots with ms name and baseline value
+    msr.plot(x_axis='frequency', iter_axis='baseline', iter_range=(0, 5), subplots=(2, 3), color_mode=None, title='ms')
     msr.show()
     filename=os.path.join(plot_dir, "waterfall_plots.png")
     msr.save(filename)
