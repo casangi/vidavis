@@ -24,15 +24,9 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install pylint
-    - name: Install graphviper
-      run: |
-        pip install graphviper
-    - name: Install hvplot
-      run: |
-        pip install hvplot
     - name: Create dummy version file
       run: |
-        touch src/vidavis/__version__.py
+        touch vidavis/__version__.py
         echo "__version__ = '0.0.0'" >> vidavis/__version__.py
     - name: Analysing the code with pylint
       run: |

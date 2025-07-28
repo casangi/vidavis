@@ -46,22 +46,25 @@ To enable conversion from MSv2 to MSv4 with **python-casacore** use (this only w
 
 - :code:`pip install "xradio[python-casacore]"`
 
-> On macOS it is required to pre-install `python-casacore` using `conda install -c conda-forge python-casacore`
+On macOS it is required to pre-install `python-casacore` using:
+
+- :code:`conda install -c conda-forge python-casacore`
+
 
 To enable exporting plots to file using preferred web driver:
 
 **Selenium** with **geckodriver** and **Firefox** (to ensure compatible versions)::
 
-  conda install -c conda-forge selenium firefox geckodriver
+- :code:`conda install -c conda-forge selenium firefox geckodriver`
 
 **Selenium** with **ChromeDriver** (Chrome), with the executable
 **chromedriver** in your PATH::
 
-  conda install -c conda-forge selenium python-chromedriver-binary
+- :code:`conda install -c conda-forge selenium python-chromedriver-binary`
 
 or::
 
-  pip install selenium chromedriver-binary
+- :code:`pip install selenium chromedriver-binary`
 
 Simple MsRaster Usage Example
 `````````````````````````````
