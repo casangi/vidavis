@@ -7,7 +7,7 @@ import time
 
 from toolviper.dask.client import local_client
 
-from casagui.apps import MsRaster
+from vidavis.apps import MsRaster
 
 ##
 ## demo measurement set to use

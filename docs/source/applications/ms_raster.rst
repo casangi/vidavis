@@ -4,64 +4,25 @@ MsRaster
 
 .. currentmodule:: applications
 
-MsRaster is an application for 2-dimensional visualization and flagging of
-visibility and spectrum data.
-
-Infrastructure
---------------
-
-MsRaster utilizes the :xref:`bokeh` backend for the raster plots.  Bokeh
-provides built-in plot tools allowing the user to zoom, pan, select regions,
-inspect data values, and save the plot. Additional libraries are used in
-MsRaster for data I/O, logging, plotting, and interactive dashboards:
-
-.. list-table::
-   :class: borderless
-   :align: center
-
-   * - .. image:: _static/bokeh_logo.svg
-          :width: 100
-     - .. image:: _static/xradio_logo.webp
-          :width: 100
-     - .. image:: _static/graphviper_logo.jpeg
-          :width: 100
-     - .. image:: _static/hvplot.png
-          :width: 60
-     - .. image:: _static/holoviews.png
-          :width: 100
-     - .. image:: _static/panel.png
-          :width: 100
-
-* :xref:`xradio` (Xarray Radio Astronomy Data I/O) implements the MeasurementSet
-  v4.0.0 schema using :xref:`xarray` to provide an interface for radio astronomy
-  data
-
-* `toolviper <https://github.com/casangi/toolviper>`_ is used for creating the
-  Dask.distributed client and for logging
-
-* `graphviper <https://github.com/casangi/graphviper>`_ is used for Dask-based
-  MapReduce to calculate statistics
-
-* Holoviz library :xref:`hvplot` allows easy visualization of :xref:`xarray`
-  data objects as interactive :xref:`bokeh` plots
-
-* Holoviz library :xref:`holoviews` allows the ability to easily layout and
-  overlay plots
-
-* Holoviz library :xref:`panel` streamlines the development of apps and
-  dashboards for the raster plots
+MsRaster is an application for 2-dimensional raster visualization and flagging
+of visibility and spectrum data. This data must be in the MeasurementSet v4.0.0
+zarr format, or MeasurementSet v2 format which will be automatically converted
+to MeasurementSet v4 if the necessary packages are installed.
 
 Implementation
 --------------
 
+Application Modes
+`````````````````
+
 MsRaster creates raster plots for the user to view interactively or save to
-disk. The app can be used in three ways from Python:
+disk. The application can be used in three ways from Python:
 
-* create raster plots exported to .png files
+* create raster plots to export to file
 
-* create interactive Bokeh raster plots shown in a browser window
+* create interactive Bokeh raster plots to show in a browser window
 
-* show a GUI dashboard in a browser window for selecting plot parameters to create
+* use a GUI dashboard in a browser window to select plot parameters and create
   interactive Bokeh raster plots
 
 Data Exploration
@@ -70,101 +31,16 @@ Data Exploration
 :xref:`xradio` allows the user to explore MeasurementSet data with a summary of
 its metadata, and to make plots of antenna positions and phase center locations
 of all fields. These features can be accessed in MsRaster, as well as the
-ability to list :xref:`data_groups` and antenna names to aid in selection.
+ability to list :xref:`data_groups` and dimension values to aid in selection.
 
 Raster Plots
 ````````````
 
-MsRaster gives the user flexibility to set plot axes and the complex component,
-select data, aggregate along one or more data dimensions, iterate along a data
-dimension, style the plot, and layout multiple plots in a grid.  All parameters
-available from the MsRaster function calls are also available in the interactive
+MsRaster gives the user flexibility to select data, style the plots, set plot
+axes and the complex component, aggregate along one or more data dimensions,
+iterate along a data dimension, and layout multiple plots in a grid.  All
+parameters available from the MsRaster methods are available in the interactive
 GUI.
-
-Installation
-------------
-
-Requirements
-````````````
-
-- Python 3.11 or greater
-
-- `graphviper <https://github.com/casangi/graphviper>`_
-
-- optionally :xref:`xradio` with `python-casacore <https://casacore.github.io/python-casacore/>`_
-  or `casatools <https://casadocs.readthedocs.io/en/stable/api/casatools.html>`_
-  to enable conversion from MSv2 to MSv4
-
-- :xref:`hvplot`
-
-To save plots, additional packages are required:
-
-- `Selenium <https://github.com/seleniumhq/selenium>`_
-
-- geckodriver for firefox, or chromedriver for chromium
-
-.. _install_msraster:
-
-Install
-```````
-
-You may want to use the conda environment manager from
-`miniforge <https://github.com/conda-forge/miniforge>`_ to create a clean,
-self-contained runtime where casagui and the MsRaster dependencies can be
-installed::
-
-  conda create --name casagui python=3.12 --no-default-packages
-  conda activate casagui
-
-Install required packages::
-
-  pip install casagui graphviper hvplot
-
-**xradio** and **toolviper** are installed as dependencies of **graphviper**. To
-install **xradio** with **python-casacore** for MSv2 conversion::
-
-  pip install "xradio[python-casacore]"
-
-.. note::
-   On macOS it is required to **pre-install** python-casacore using
-   ``conda install -c conda-forge python-casacore``.
-
-It is also possible to use
-`casatools <https://casadocs.readthedocs.io/en/stable/api/casatools.html>`_
-as the backend for reading the MSv2. See the
-`XRADIO casatools setup guide <https://xradio.readthedocs.io/en/latest/measurement_set/guides/backends.html>`_
-for more information.
-
-Install packages to save plots to file (**choose one**)::
-
-  conda install -c conda-forge selenium firefox geckodriver
-  conda install -c conda-forge selenium python-chromedriver-binary
-  pip install selenium chromedriver-binary
-
-Dask.distributed Scheduler
---------------------------
-
-For parallel processing workflows, you can set up a local Dask cluster using
-:xref:`toolviper`. Dask.distributed is a centrally managed, distributed, dynamic
-task scheduler.
-
-**Prior to** using MsRaster, you may elect to start a Dask Client (local
-machine) or a Dask LocalCluster (cluster). For a local client, set the number of
-cores and memory limit per core to use. The logging level for the main thread
-and the worker threads may also be set (default "INFO"). When plotting small
-datasets, however, this adds overhead which may make plotting slower than
-without the client.
-
-:xref:`toolviper` has an interface to create and access a local or distributed
-client.  See the
-`client tutorial <https://github.com/casangi/toolviper/blob/main/docs/client_tutorial.ipynb>`_
-and ``help(local_client)`` or ``help(distributed_client)`` for more information.
-
-.. warning::
-   If Python scripts are used to make plots, the client should not be created in
-   the main thread.  For more details, see
-   `Standalone Python scripts <https://docs.dask.org/en/stable/scheduling.html#standalone-python-scripts>`_
-   in the Dask Scheduling documentation.
 
 Using MsRaster to Create Plots
 ------------------------------
@@ -173,7 +49,7 @@ In this simple example with no GUI, we import MsRaster, construct an MsRaster
 object, create a raster plot with default parameters, and show the interactive
 Bokeh plot in a browser tab::
 
-    from casagui.apps import MsRaster
+    from vidavis.apps import MsRaster
     msr = MsRaster(ms=myms)
     msr.plot()
     msr.show()
@@ -284,14 +160,10 @@ the MeasurementSets (see ``select_ms()`` in :ref:`select_data`)::
     >>> msr.get_dimension_values('polarization')
     ['XX', 'YY']
 
-When the data has been previously selected, the returned values will be for the
-dimension in the selected ProcessingSet.  Use ``clear_selection()`` to see all
-values in the original ProcessingSet.
-
 The ``time`` dimension is returned as datetime strings in the format
-``dd-Mon-YYYY HH:MM:SS``.  Use this format to select time in ``select_ms()``.
+*dd-Mon-YYYY HH:MM:SS*.  Use this format to select time in ``select_ms()``.
 
-The ``baseline`` dimension is returned as strings in the format ``ant1 & ant2``.
+The ``baseline`` dimension is returned as strings in the format *ant1 & ant2*.
 Use this format to selection baseline in ``select_ms()``.
 
 .. _plot_antennas:
@@ -330,18 +202,18 @@ By default, MsRaster uses the *Viridis* colormap for unflagged data and the
 Use the ``set_style_params()`` function to change these settings. These style
 settings will then be used for all plots for the MsRaster object::
 
-    >>> msr.set_style_params(unflagged_cmap='Viridis', flagged_cmap='Reds', show_colorbar=True,
-    show_flagged_colorbar=True)
+    >>> msr.set_style_params(unflagged_cmap='Viridis', flagged_cmap='Reds',
+    show_colorbar=True, show_flagged_colorbar=True)
 
 Use ``colormaps()`` to get the list of available colormaps::
 
     >>> msr.colormaps()
-    ['Blues', 'Cividis', 'Greens', 'Greys', 'Inferno', 'Magma', 'Oranges', 'Plasma', 'Purples',
-    'Reds', 'Turbo', 'Viridis']
+    ['Blues', 'Cividis', 'Greens', 'Greys', 'Inferno', 'Magma', 'Oranges',
+    'Plasma', 'Purples', 'Reds', 'Turbo', 'Viridis']
 
 It is expected that in the future, additional style settings will be available,
 such as fonts for plot labels. It is also possible that in the future these
-settings will be able to be saved in a config.py file.
+settings will be able to be saved in a ~/.vidavis/config.py file.
 
 .. _select_data:
 
@@ -352,6 +224,9 @@ MsRaster has two ways to select data: ``select_ps()`` to select a subset of
 ProcessingSet MeasurementSets, and ``select_ms()`` to select data in the
 MeasurementSets.  Use either method to select one of the available data groups
 using keyword ``data_group_name`` (see :ref:`data_groups <data_groups>`).
+
+Select ProcessingSet
+^^^^^^^^^^^^^^^^^^^^
 
 ``select_ps()`` is based on the ProcessingSet :ref:`summary <summary>`. Since
 the summary is a Pandas dataframe, a Pandas ``query`` string may be used to
@@ -384,6 +259,9 @@ MeasurementSets, unless ``exact_string_match=True`` and the column name is
 
 For additional explanation and examples, see also `ProcessingSetXdt.query() 
 <https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query>`_.
+
+Select MeasurementSet
+^^^^^^^^^^^^^^^^^^^^^
 
 ``select_ms()`` is based on the MeasurementSet dimensions. Keyword arguments
 include ``data_group_name`` and dimensions ``time``, ``baseline``
@@ -604,7 +482,7 @@ After a plot is created (see :ref:`create_plot`), it may be saved to a file with
 
 * ``filename`` (str): Name of file to save. Default '': the plot will be saved
   as {ms}_raster.{ext}. If fmt is not set, plot will be saved as .png.
-* ``fmt`` (str): Format of file to save ('png', 'svg', 'html', or 'gif'). Default
+* ``fmt`` (str): Format of file to save ('png', 'html', or 'gif'). Default
   'auto': inferred from filename extension.
 * ``width`` (int): width of exported plot.
 * ``height`` (int): height of exported plot.
@@ -678,7 +556,7 @@ MsRaster plot parameters:
 
 * :ref:`select_data` parameters:
 
-  * **Selection**:
+  * **Data Selection**:
 
     * **Select ProcessingSet**: query, summary column names
     * **Select MeasurementSet**: data group, dimensions, antenna1 and antenna2

@@ -1,0 +1,74 @@
+########################################################################
+#
+# Copyright (C) 2024
+# Associated Universities, Inc. Washington DC, USA.
+#
+# This script is free software; you can redistribute it and/or modify it
+# under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This library is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Library General Public
+# License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this library; if not, write to the Free Software Foundation,
+# Inc., 675 Massachusetts Ave, Cambridge, MA 02139, USA.
+#
+# Correspondence concerning AIPS++ should be adressed as follows:
+#        Internet email: casa-feedback@nrao.edu.
+#        Postal address: AIPS++ Project Office
+#                        National Radio Astronomy Observatory
+#                        520 Edgemont Road
+#                        Charlottesville, VA 22903-2475 USA
+#
+########################################################################
+''' Set the application context '''
+
+from os.path import join
+import re
+from tempfile import TemporaryDirectory
+import unicodedata
+
+from bokeh.io import output_file
+
+class AppContext:
+    ''' Set title for browser tab and create work directory for application '''
+
+    def _slugify(self, value, allow_unicode=False):
+        """
+        Taken from https://github.com/django/django/blob/master/django/utils/text.py
+        Convert to ASCII if 'allow_unicode' is False. Convert spaces or repeated
+        dashes to single dashes. Remove characters that aren't alphanumerics,
+        underscores, or hyphens. Convert to lowercase. Also strip leading and
+        trailing whitespace, dashes, and underscores.
+        https://stackoverflow.com/a/295466/2903943
+        """
+        value = str(value)
+        if allow_unicode:
+            value = unicodedata.normalize('NFKC', value)
+        else:
+            value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+        value = re.sub(r'[^\w\s-]', '', value.lower())
+        return re.sub(r'[-\s]+', '-', value).strip('-_')
+
+    def __init__( self, title, prefix=None ):
+
+        if prefix is None:
+            ## create a prefix from the title
+            prefix = self._slugify(title)[:10]
+# pylint: disable=consider-using-with
+        self.__workdir = TemporaryDirectory(prefix=prefix)
+# pylint: enable=consider-using-with
+        self.__htmlpath = join( self.__workdir.name, f'''{self._slugify(title)}.html''' )
+        output_file( self.__htmlpath, title=title )
+
+    def __del__( self ):
+        ''' Remove work directory and its contents '''
+        self.__workdir.cleanup( )
+
+    def workdir( self ):
+        ''' Return name of temporary work directory '''
+        return self.__workdir.name

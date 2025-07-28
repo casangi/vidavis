@@ -4,7 +4,7 @@ import certifi
 import urllib
 import tarfile
 
-from casagui.apps import MsRaster
+from vidavis.apps import MsRaster
 
 ##
 ## demo measurement set to use

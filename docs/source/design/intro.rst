@@ -1,149 +1,112 @@
 .. _design-system-design:
 
 System Design
-====================
+=============
 
 .. currentmodule:: design
 
-This design document describes the history, motivation and design of the casagui
-system. This system includes the casagui Python package and the casagui application
-framework. The casagui Python package is used by pipeline developers and other Python
-users to access casagui functionality from Python. The casagui application framework
-also uses the casagui Python package. The design of the casagui system allows the
-same Python functions to generate raster files for pipeline use, plots for Python
-users, and the visualization elements that are included in CASA desktop applications.
-Having a single implementation ensures consistency and minimizes development and maintenance.
+This design document describes the history, motivation and design of the
+:code:`vidavis` package, which allows the same Python functions to generate plot
+files for pipeline use and interactive plots for Python users, along with the
+visualization components that are included in web-based applications. Having a
+single implementation ensures consistency and minimizes development and
+maintenance.
+
+Traditional Approach
+--------------------
+
+In the past our GUIs have been very big C++/`Qt <https://www.qt.io/>`_
+applications which were monolithic, difficult to make script-able and complex to
+maintain. They were monolithic because at the time when Qt was adopted, having
+one GUI library that could be built on different platforms and work with
+different windowing systems was a big advance. To accomplish this task, an
+entire, low-level GUI widget library was created. Applications built upon it
+needed to be built for each platform even though the Qt framework was portable.
+These applications were stand-alone processes and because of this, they were
+completely independent of the Python interpreter's process environment. All
+*scripting* needed to be done by sending messages between the Python environment and
+the compiled C++ application.
+
+Framework Approach
+------------------
+
+To avoid these problems, we are attempting to take a new, modern approach:
+
+#. Use a framework that is implemented in **pure-Python**
+
+#. Use a development framework that provides **higher level functionality**
+   instead of low level widgets
+
+#. Create **reusable tools** instead of specific applications
+
+#. Use a framework that is **web-centric**
+
+A *pure-Python* implementation means that the applications we produce will work
+in a similar way everywhere Python is available.  Direct integration with Python
+also means that we will not experience all of the hurdles we have faced
+attempting to make the existing CASA GUIs scriptable. It also means that a
+packaging and distribution mechanism exists to allow users to easily install the 
+package *along with all of its dependencies*. Better integration with the Python
+ecosystem also means that things that are currently done in C++ code that CASA
+developers maintain can instead be done using Python code that is maintained by
+the Python community. This is a gradual process, so over time we *should* reap
+greater rewards as our integration increases.
+
+By choosing a framework that already provides the *higher level functionality*
+that we require, we can avoid implementing each part of the interface at a fine
+level of detail. Because it is written in Python, the interface is also
+specified at a higher level of abstraction than the C++ equivalent. To avoid
+creating monolithic applications, we need to look for opportunities to
+*create reusable tools* that can be used by a variety of applications. This
+allows multiple end-user applications to share a common set of components, but
+it also should extend the development framework in ways that customize it to
+our domain.
+
+By choosing a *web-centric* framework, we gain portability and generality.
+Modern web browsers are self-contained visualization environments that are
+available on all platforms. Using this instead of a large development library
+like `Qt <https://www.qt.io/>`_ frees us from the need to compile our
+application for each platform. It also increases our portability beyond
+just platform portability. By using a web-centric framework, it is much
+easier to make our GUIs available in
+`Jupyter Notebooks <https://jupyter.org/>`_ or as a part of websites. This
+allows our applications to reach a wide variety of users.
+
+While the advantages of this approach to GUI development vastly outweighs
+the disadvantages, there are disadvantages. Free-standing applications are
+set apart for desktop users by their nature. Mixing the vidavis GUIs in with all
+of the other things that are done with web browsers causes the GUI to be
+another tree in the forest. There are also performance ramifications. Due
+in large part to all of the overhead, purpose-built, compiled applications
+are very fast compared with just-in-time, on-the-fly web-centric applications
+because much code is compiled dynamically as the application is loaded.
+Using the framework directly from a Python interpreter depends on using
+the web browser that is running on the same host. This is inconvenient
+for remote use (user logs into a system and runs Python) because the web
+browser must be displayed remotely with VNC or X11. This particular
+problem can be resolved by using `Electron <https://www.electronjs.org/>`_
+to create an application that runs on the user's local host with the
+application controlling a Python kernel running on the remote host in
+a model similar to Jupyter Notebooks.
 
 Usage Settings
--------------------
+--------------
 
-In addition to the desire to have a single implementation to provide the core visualization
-functionality, there are four settings where the single Python implementation will have
-to function. All of the casagui functionality will **not** be available in all of these
-settings, but some subset will be available in all settings. The limits on applicability
-come from setting limitations (headless operation precludes direct user interaction) as
-well as platform limitations (Jupyter notebook model centers around evaluating a cell and
-receiving a response). We navigate these limitations as the casagui system is built out
-with new GUI elements. The rest of this section will outline the usage settings for the
-casagui system.
+Users can interact with :code:`vidavis` in various settings, including headless,
+terminal, application, and notebook.  These usage settings are described in more
+detail separately.
 
-Headless
-^^^^^^^^^^^^^^^^^
+.. toctree::
+   :maxdepth: 3
 
-.. image:: _static/headless_model.svg
-           :align: left
-           :width: 60px
-
-In many applications, user interaction is not possible. A display may not exist or it may
-not be accessible. One important area that the casagui system must support is pipeline
-processing of data collected from radio telescopes. This processing happens after the data
-is collected by the online system and it generates the observation artifacts that are
-provided to investigators.
-
-In the headless setting, the only process involved from the casagui perspective is the
-Python process that imported the casagui Python package, and the only display option
-available is the generation of raster files (png, jpg, etc.).
-
-.. _design-terminal-usage:
-
-Terminal
-^^^^^^^^^^^^^^^^
-
-
-.. image:: _static/terminal_model.svg
-           :align: left
-           :width: 160px
-
-The terminal setting is the typical Python usage setting. In this case, the user interacts
-with Python interactively, e.g. with IPython, or by running Python scripts from a terminal.
-A display is available, but no other support processes are available. The user installs
-the casagui package into their python environment using something like pip.  Because we
-want to avoid OS specific binary applications, all casagui functionality in this setting is
-implemented in Python, and the frameworks which are leveraged in the implementation are
-also in Python. These individual frameworks may provide OS-specific implementations, but
-the casagui Python package is isolated from the incompatibilities which such implementations
-entail.
-
-In the terminal setting, the user’s web browser is the best display option. It is (hopefully)
-compatible with the casagui application framework, and the user already has a browser that
-they use that is suitable for display. It is possible that some Python visualization packages
-also include a server for displaying information, and in some cases, this may be the only
-option. However, the only processes that are available in the terminal setting are those
-that the user is expected to have (browser) and those that come with standard Python packages.
-
-Application
-^^^^^^^^^^^^^^^^
-
-.. image:: _static/application_model.svg
-           :align: left
-           :width: 180px
-
-The application setting is in some respects a new setting for CASA. Although CASA has had
-applications in the past, for example casaviewer, casaplotms, etc., these have been
-purpose-built applications that were implemented separately from the main CASA Python
-application. Typically, these applications leveraged some portion of the C++ code that
-underlies the implementation of the casatools. This implementational separation from Python
-made it difficult to implement a Python scripting interface for the purpose-built, stand-alone
-applications.
-
-The casagui system takes a different approach. The casagui Python package and its application
-framework, Electron, are leveraged to create a platform for hosting all of the visualization
-applications in the casagui system. All of these applications will be hosted by a single, running
-instance of the application framework. This is possible because the framework is built on Chromium,
-the same application framework that underlies the Google Chrome browser.
-
-In the application setting, we have much more flexibility and control than in any of the other
-settings. Here we leverage the Jupyter Protocol and the IPython kernel that goes along with it.
-The **same** casagui python package used in the other settings is imported into the IPython
-kernel and generates the visualization elements that go into producing standalone applications.
-These applications are too complex to be implemented using currently available python frameworks.
-By using Electron and the tools that are available in TypeScript/JavaScript, the same plots
-that are available to users in the other settings can be incorporated into much more capable and
-wide ranging applications in this setting. A plot that is generated in the headless setting for
-saving to a raster file will be identical to the plot displayed in our Electron application, since
-they use the same casagui Python implementation.
-
-Notebook
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. image:: _static/notebook_model.svg
-           :align: left
-           :width: 180px
-
-The GUI elements available in the notebook setting will be a subset of those available in the
-application setting. However, because our application framework and Jupyter notebooks share the
-same underlying protocol, many of the plots generated by the common casagui Python package will
-just automatically work in the notebook setting. While notebooks are very useful for collaboration
-and documentation, this is the least important of the usage settings we are targeting, but we
-structured our architecture to support notebook display as much as possible.
-
-This setting is less general than the application setting. When users interact with a Jupyter
-notebook, they may not realize that there is an execution context (typically Python) underlying
-the notebook web page. Here our process diagram (above) looks below the surface to expose the
-similarities between the notebook setting and our application setting. They share a communication
-protocol and an execution environment in common.
-
-The notebook setting is constrained by the limitations of the Jupyter notebook architecture.
-Most of the individual plots that the casagui Python package is capable of creating should
-display fine within a notebook. The very complicated applications which can be created in the
-application setting will not be available in the notebook setting.
+   usage_settings
 
 Design Documents
--------------------
-
-The casagui design documents are available for more detailed discussions about the implementation
-of specific tools and applications.
+------------------
 
 .. toctree::
    :maxdepth: 3
-   :caption: Applications:
 
-   applications/interactive_clean
-   boundary
-   ../python/casagui
-
-.. toctree::
-   :maxdepth: 3
-   :caption: Component Toolbox:
-
-   components/cube_mask
+   visibility_plotting
+   applications/ms_raster
+   ../python/index

@@ -13,8 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-#         python-version: ["3.8", "3.9", "3.10"]
-        python-version: ["3.10"]
+        python-version: ["3.11"]
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python ${{ matrix.python-version }}
@@ -25,23 +24,16 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install pylint
-    - name: Install websockets
+    - name: Install graphviper
       run: |
-        pip install websockets
-    - name: Install casatasks
+        pip install graphviper
+    - name: Install hvplot
       run: |
-        pip install casatasks
-    - name: Install astropy
-      run: |
-        pip install astropy
-        pip install regions
-    - name: Install bokeh
-      run: |
-        pip install "bokeh>=3.2"
+        pip install hvplot
     - name: Create dummy version file
       run: |
-        touch casagui/__version__.py
-        echo "__version__ = '0.0.0'" >> casagui/__version__.py
+        touch vidavis/__version__.py
+        echo "__version__ = '0.0.0'" >> vidavis/__version__.py
     - name: Analysing the code with pylint
       run: |
-        pylint "--msg-template='{abspath}:{line:5d},{column:2d}: {msg} ({symbol})'" --rcfile=pylintrc --output-format=colorized $(git ls-files '*.py' | egrep '^casagui/')
+        pylint "--msg-template='{abspath}:{line:5d},{column:2d}: {msg} ({symbol})'" --rcfile=pylintrc --output-format=colorized $(git ls-files '*.py' | egrep '^src/vidavis/')

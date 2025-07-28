@@ -1,7 +1,7 @@
 [project]
-name = "casagui"
+name = "vidavis"
 dynamic = ["version"]
-description = "visualization toolkit and apps for casa"
+description = "Radio astronomy visibility data visualization"
 authors = [
     {name = "Darrell Schiebel", email = "darrell@schiebel.us"},
     {name = "Pam Harris", email = "pharris@nrao.edu"},
@@ -9,26 +9,23 @@ authors = [
 
 dependencies = [
     "bokeh==3.6.1",
-    "astropy>=5.1",
-    "regions>=0.6",
-    "websockets>=10.3",
-    "certifi",
-    "matplotlib",
+    "hvplot",
+    "graphviper",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11, <3.14"
 readme = "readme.rst"
 license = {text = "LGPL"}
 
 [tool]
 [tool.pdm]
 [tool.pdm.build]
-excludes = [ "casagui/apps/*.mustache", "casagui/private/casashell/*.mustache", "casagui/private/casatasks/*.mustache", "**/*.xml", "**/*.py-*", "**/*~" ]
+excludes = [ "**/*.xml", "**/*.py-*", "**/*~" ]
 
 [tool.pdm.version]
 source = "scm"
-write_to = "casagui/__version__.py"
+write_to = "vidavis/__version__.py"
 write_template = "__version__ = '{}'"  # optional, default to "{}"
 
 [build-system]
-requires = ["pdm-pep517>=0.12.0"]
+requires = ["pdm-pep517"]
 build-backend = "pdm.pep517.api"
