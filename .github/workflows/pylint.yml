@@ -24,6 +24,15 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install pylint
+    - name: Install bokeh
+      run: |
+        pip install "bokeh>=3.2"
+    - name: Install graphviper
+      run: |
+        pip install graphviper
+    - name: Install hvplot
+      run: |
+        pip install hvplot
     - name: Analysing the code with pylint
       run: |
         pylint "--msg-template='{abspath}:{line:5d},{column:2d}: {msg} ({symbol})'" --rcfile=pylintrc --output-format=colorized $(git ls-files '*.py' | egrep '^src/vidavis/')
