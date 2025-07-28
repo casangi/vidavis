@@ -50,19 +50,18 @@ On macOS it is required to pre-install `python-casacore` using:
 
 - :code:`conda install -c conda-forge python-casacore`
 
-
 To enable exporting plots to file using preferred web driver:
 
-**Selenium** with **geckodriver** and **Firefox** (to ensure compatible versions)::
+**Selenium** with **geckodriver** and **Firefox** (to ensure compatible versions):
 
 - :code:`conda install -c conda-forge selenium firefox geckodriver`
 
 **Selenium** with **ChromeDriver** (Chrome), with the executable
-**chromedriver** in your PATH::
+**chromedriver** in your PATH:
 
 - :code:`conda install -c conda-forge selenium python-chromedriver-binary`
 
-or::
+or:
 
 - :code:`pip install selenium chromedriver-binary`
 
