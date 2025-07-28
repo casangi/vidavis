@@ -9,9 +9,9 @@ Introduction
 
 This package currently requires the visibility data to conform to the
 `xradio <https://xradio.readthedocs.io/en/latest/>` MeasurementSet v4.0.0 schema
-input as a Zarr file path. Input MSv2 file paths will be automatically converted
-to MSv4 zarr files with default partitioning if the necessary packages are found
-(see Requirements section below).
+input as a Zarr file path, which is read into an Xarray-based ProcessingSet.
+Input MSv2 file paths will be automatically converted to MSv4 zarr files with
+default partitioning if the necessary packages are found (see Requirements).
 
 The `Bokeh <https://bokeh.org/>`_ plots are created with
 `hvPlot <https://hvplot.holoviz.org/>`_ and optionally shown in a
