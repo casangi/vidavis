@@ -32,7 +32,7 @@ jobs:
         pip install hvplot
     - name: Create dummy version file
       run: |
-        touch vidavis/__version__.py
+        touch src/vidavis/__version__.py
         echo "__version__ = '0.0.0'" >> vidavis/__version__.py
     - name: Analysing the code with pylint
       run: |

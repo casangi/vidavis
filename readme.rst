@@ -8,10 +8,11 @@ Introduction
 ------------
 
 This package currently requires the visibility data to conform to the
-`xradio <https://xradio.readthedocs.io/en/latest/>` MeasurementSet v4.0.0 schema
-input as a Zarr file path, which is read into an Xarray-based ProcessingSet.
-Input MSv2 file paths will be automatically converted to MSv4 zarr files with
-default partitioning if the necessary packages are found (see Requirements).
+`XRADIO <https://xradio.readthedocs.io/en/latest/>`_ MeasurementSet v4.0.0
+schema, input as a Zarr file path which is read into an Xarray-based XRADIO
+ProcessingSet. Input MSv2 file paths will be automatically converted to MSv4
+zarr files with default partitioning if the necessary packages are found (see
+Requirements).
 
 The `Bokeh <https://bokeh.org/>`_ plots are created with
 `hvPlot <https://hvplot.holoviz.org/>`_ and optionally shown in a
@@ -30,25 +31,24 @@ Requirements
 
 - Python 3.11 or greater
 
-- Optionally `python-casacore<https://pypi.org/project/python-casacore/>`_ or
-  `casatools<https://pypi.org/project/casatools/>`_ for MSv2 conversion
+- Optionally `python-casacore <https://pypi.org/project/python-casacore/>`_ or
+  `casatools <https://pypi.org/project/casatools/>`_ for MSv2 conversion
 
-- Optionally to export to file using ``save()``, install
-  `Selenium <https://www.selenium.dev/documentation/en/>`_ along with a web
-  driver.
+- Optionally `Selenium <https://www.selenium.dev/documentation/en/>`_ along with
+  a web driver to export to file using ``save()``
 
 Install
 ```````
 
-- :code:`bash$ pip install vidavis`
+- :code:`pip install vidavis`
 
 To enable conversion from MSv2 to MSv4 with **python-casacore** use (this only works for Linux):
 
 - :code:`pip install "xradio[python-casacore]"`
 
-On macOS it is required to pre-install **python-casacore** using `conda install -c conda-forge python-casacore`.
+> On macOS it is required to pre-install `python-casacore` using `conda install -c conda-forge python-casacore`
 
-To enable exporting plots to file:
+To enable exporting plots to file using preferred web driver:
 
 **Selenium** with **geckodriver** and **Firefox** (to ensure compatible versions)::
 
