@@ -42,6 +42,9 @@ Install
 
 - :code:`pip install vidavis`
 
+MSv2 Conversion
+^^^^^^^^^^^^^^^
+
 To enable conversion from MSv2 to MSv4 with **python-casacore** use (this only works for Linux):
 
 - :code:`pip install "xradio[python-casacore]"`
@@ -50,7 +53,11 @@ On macOS it is required to pre-install `python-casacore` using:
 
 - :code:`conda install -c conda-forge python-casacore`
 
-To enable exporting plots to file using preferred web driver:
+Exporting Plots
+^^^^^^^^^^^^^^^
+
+To enable exporting plots to file without showing the plot, using preferred web
+driver:
 
 **Selenium** with **geckodriver** and **Firefox** (to ensure compatible versions):
 
