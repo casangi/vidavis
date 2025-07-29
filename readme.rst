@@ -1,8 +1,8 @@
 vidavis - VIsibility DAta VISualization
 =======================================
 
-This is a **pre-alpha** package. All applications are currently in various
-phases of *prototyping*.
+This is a **pre-alpha** package. All applications are in various phases of
+*prototyping*.
 
 Introduction
 ------------
@@ -18,8 +18,8 @@ The `Bokeh <https://bokeh.org/>`_ plots are created with
 `hvPlot <https://hvplot.holoviz.org/>`_ and optionally shown in a
 `Panel <https://panel.holoviz.org/>`_-based GUI.
 
-The **MsRaster** application creates raster plots of visibility data.  See
-example below.
+The first application added to **vidavis** is **MsRaster**, which creates raster
+plots of visibility data.  See example below.
 
 Installation
 ------------
