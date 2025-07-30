@@ -479,7 +479,7 @@ active by default, contains the plot:
 .. image:: _static/show_plot.png
 
 The second tab shows the plot inputs (including automatic selections) used to
-make the raster plot:
+make the raster plot, sorted alphabetically:
 
 .. image:: _static/show_plot_inputs.png
 
@@ -551,7 +551,8 @@ required.
     >>> msr = MsRaster(ms=None, log_level='info', show_gui=True)
 
 The GUI will immediately launch in a browser tab.  If ``ms`` is set, a plot with
-default parameters is created and shown in the GUI.
+default parameters is created and shown in the GUI. As with ``show()``, the plot
+is shown in a tab, with the inputs for the plot shown in the second tab:
 
 .. image:: _static/msraster_gui.png
 
@@ -586,4 +587,4 @@ inputs change. Click ``Plot`` to render the plot.
 
 .. note::
    The only way to create multiple plots in the GUI is by iteration. Iterated
-   plots in a layout will be shown in a Bokeh plot in a **new browser tab**.
+   plots **in a layout** will be shown in a **new browser tab**.
