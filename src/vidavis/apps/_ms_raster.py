@@ -24,8 +24,9 @@ class MsRaster(MsPlot):
     Plot MeasurementSet data as raster plot.
 
     Args:
-        ms (str): path to MSv2 (.ms) or MSv4 (.zarr) file. Required when show_gui=False.
+        ms (str, None): path to MSv2 (.ms) or MSv4 (.zarr) file. Default None. Required when show_gui=False.
         log_level (str): logging threshold. Options include 'debug', 'info', 'warning', 'error', 'critical'. Default 'info'.
+        log_to_file (bool): whether to write log messages to log file "msraster-<timestamp>.log". Default True.
         show_gui (bool): whether to launch the interactive GUI in a browser tab. Default False.
 
     Example:
@@ -39,8 +40,8 @@ class MsRaster(MsPlot):
         msr.save() # saves as {ms name}_raster.png
     '''
 
-    def __init__(self, ms=None, log_level="info", show_gui=False):
-        super().__init__(ms, log_level, show_gui, "MsRaster")
+    def __init__(self, ms=None, log_level="info", log_to_file=True, show_gui=False):
+        super().__init__(ms, log_level, log_to_file, show_gui, "MsRaster")
         self._raster_plot = RasterPlot()
 
         # Calculations for color limits
@@ -278,6 +279,10 @@ class MsRaster(MsPlot):
         self._set_auto_color_range(plot_inputs) # set calculated limits if auto mode
         ms_name = self._ms_info['basename'] # for title
         self._raster_plot.set_plot_params(raster_data, plot_inputs, ms_name)
+
+        # Show plot inputs in log
+        super()._set_plot_params(plot_inputs | self._raster_plot.get_plot_params()['style'])
+        self._logger.info("MsRaster plot parameters: %s", ", ".join(self._plot_params))
 
         # Make plot. Add data min/max if GUI is shown to update color limits range.
         return self._raster_plot.raster_plot(raster_data, self._logger, self._show_gui)
