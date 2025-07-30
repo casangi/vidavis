@@ -282,4 +282,4 @@ class MsPlot:
                 del plot_inputs[key]
             except KeyError:
                 pass
-        self._plot_params = [f"{key}={value}" for key, value in plot_inputs.items()]
+        self._plot_params = sorted([f"{key}={value}" for key, value in plot_inputs.items()])

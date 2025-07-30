@@ -105,15 +105,16 @@ class PsData:
         return len(self._get_ps_xdt())
 
     def get_max_dims(self):
-        ''' Returns maximum length of data dimensions in selected ps_xdt (if selected) '''
+        ''' Returns maximum length of dimensions in selected ProcessingSet (if selected) '''
         ps_xdt = self._get_ps_xdt()
         return ps_xdt.xr_ps.get_max_dims()
 
     def get_data_dimensions(self):
-        ''' Return the maximum dimensions in selected ProcessingSet (if selected) '''
+        ''' Return names of the data dimensions. '''
         dims = list(self.get_max_dims().keys())
         if 'uvw_label' in dims:
             dims.remove('uvw_label') # not a VISIBILITY/SPECTRUM data dim
+        dims = ['baseline' if dim=='baseline_id' else dim for dim in dims]
         return dims
 
     def get_dimension_values(self, dimension):
