@@ -24,13 +24,14 @@ class MsPlot:
 
     ''' Base class for MS plots with common functionality '''
 
-    def __init__(self, ms=None, log_level="info", show_gui=False, app_name="MsPlot"):
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+    def __init__(self, ms=None, log_level="info", log_to_file=False, show_gui=False, app_name="MsPlot"):
         if not ms and not show_gui:
             raise RuntimeError("Must provide ms/zarr path if gui not shown.")
 
         # Set logger: use toolviper logger else casalog else python logger
         if _HAVE_TOOLVIPER:
-            self._logger = setup_logger(app_name, log_to_term=True, log_to_file=False, log_level=log_level.upper())
+            self._logger = setup_logger(app_name, log_to_term=True, log_to_file=log_to_file, log_file=app_name.lower(), log_level=log_level.upper())
         else:
             self._logger = get_logger()
             self._logger.setLevel(log_level.upper())
@@ -49,6 +50,7 @@ class MsPlot:
 
         # Initialize plot inputs and params
         self._plot_inputs = {'selection': {}}
+        self._plot_params = None
 
         # Initialize plots
         self._plot_init = False
@@ -59,6 +61,7 @@ class MsPlot:
         self._data = None
         self._ms_info = {}
         self._set_ms(ms)
+# pylint: enable=too-many-arguments, too-many-positional-arguments
 
     def summary(self, data_group='base', columns=None):
         ''' Print ProcessingSet summary.
@@ -150,7 +153,14 @@ class MsPlot:
             plot = hv.render(layout_plot)
 
         self._plots_locked = False
-        show(plot)
+        if self._plot_params:
+            column = pn.Column()
+            for param in self._plot_params:
+                column.append(pn.pane.Str(param))
+            tabs = pn.Tabs(('Plot', plot), ('Plot Inputs', column))
+            tabs.show(title=self._app_name, threaded=True)
+        else:
+            show(plot)
 
     def save(self, filename='ms_plot.png', fmt='auto', width=900, height=600):
         '''
@@ -262,3 +272,14 @@ class MsPlot:
             self._logger.warning(message)
             if self._show_gui:
                 self._toast = pn.state.notifications.warning(message, duration=duration)
+
+    def _set_plot_params(self, plot_params):
+        ''' Set list of plot parameters as key=value string, for logging or browser display '''
+        plot_inputs = plot_params.copy()
+        for key in ['self', '__class__', 'data_dims']:
+            # Remove keys from using function locals()
+            try:
+                del plot_inputs[key]
+            except KeyError:
+                pass
+        self._plot_params = sorted([f"{key}={value}" for key, value in plot_inputs.items()])

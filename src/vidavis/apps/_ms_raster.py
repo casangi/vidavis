@@ -24,8 +24,9 @@ class MsRaster(MsPlot):
     Plot MeasurementSet data as raster plot.
 
     Args:
-        ms (str): path to MSv2 (.ms) or MSv4 (.zarr) file. Required when show_gui=False.
+        ms (str, None): path to MSv2 (.ms) or MSv4 (.zarr) file. Default None. Required when show_gui=False.
         log_level (str): logging threshold. Options include 'debug', 'info', 'warning', 'error', 'critical'. Default 'info'.
+        log_to_file (bool): whether to write log messages to log file "msraster-<timestamp>.log". Default True.
         show_gui (bool): whether to launch the interactive GUI in a browser tab. Default False.
 
     Example:
@@ -39,8 +40,8 @@ class MsRaster(MsPlot):
         msr.save() # saves as {ms name}_raster.png
     '''
 
-    def __init__(self, ms=None, log_level="info", show_gui=False):
-        super().__init__(ms, log_level, show_gui, "MsRaster")
+    def __init__(self, ms=None, log_level="info", log_to_file=True, show_gui=False):
+        super().__init__(ms, log_level, log_to_file, show_gui, "MsRaster")
         self._raster_plot = RasterPlot()
 
         # Calculations for color limits
@@ -211,11 +212,7 @@ class MsRaster(MsPlot):
 
         # Get data dimensions if valid MS is set to check input axes
         if 'data_dims' in self._ms_info:
-            data_dims = self._ms_info['data_dims']
-            if 'baseline_id' in data_dims:
-                data_dims.remove('baseline_id')
-                data_dims.append('baseline')
-            inputs['data_dims'] = data_dims
+            inputs['data_dims'] = self._ms_info['data_dims'] if 'data_dims' in self._ms_info else None
 
         # Validate input arguments then set
         check_inputs(inputs)
@@ -278,6 +275,10 @@ class MsRaster(MsPlot):
         self._set_auto_color_range(plot_inputs) # set calculated limits if auto mode
         ms_name = self._ms_info['basename'] # for title
         self._raster_plot.set_plot_params(raster_data, plot_inputs, ms_name)
+
+        # Show plot inputs in log
+        super()._set_plot_params(plot_inputs | self._raster_plot.get_plot_params()['style'])
+        self._logger.info("MsRaster plot parameters: %s", ", ".join(self._plot_params))
 
         # Make plot. Add data min/max if GUI is shown to update color limits range.
         return self._raster_plot.raster_plot(raster_data, self._logger, self._show_gui)
@@ -475,8 +476,9 @@ class MsRaster(MsPlot):
 
         # Layout plot and input widgets in a row
         self._gui_layout = pn.Row(
-            pn.Column(           # [0]
-                dmap,
+            pn.Tabs(             # [0]
+                ('Plot', dmap),               # [0]
+                ('Plot Inputs', pn.Column()), # [1]
                 sizing_mode='stretch_width',
             ),
             pn.Spacer(width=10), # [1]
@@ -544,6 +546,9 @@ class MsRaster(MsPlot):
             # Subparam values changed but not applied to plot
             gui_plot = self._last_gui_plot
 
+        # Update plot inputs for gui
+        self._set_plot_params(self._plot_inputs | style_inputs)
+
         # Save inputs to see if changed
         self._last_plot_inputs = self._plot_inputs.copy()
         self._last_style_inputs = style_inputs.copy()
@@ -556,7 +561,8 @@ class MsRaster(MsPlot):
         # Save plot if no new plot
         self._last_gui_plot = gui_plot
 
-        # Change plot button and stop spinner
+        # Add plot inputs, change plot button to outline, and stop spinner
+        self._update_plot_inputs()
         self._update_plot_status(False)
         self._update_plot_spinner(False)
 
@@ -636,15 +642,16 @@ class MsRaster(MsPlot):
         return self._empty_plot
 
     def _create_empty_plot(self):
-        ''' Create empty Overlay plot for DynamicMap with default color params and hover enabled '''
+        ''' Create empty Overlay plot for DynamicMap with colormap params and hover enabled '''
         plot_params = self._raster_plot.get_plot_params()
         plot = hv.Overlay(
             hv.QuadMesh([]).opts(
-                colorbar=False,
+                colorbar=plot_params['style']['show_flagged_colorbar'],
                 cmap=plot_params['style']['flagged_cmap'],
                 responsive=True,
             ) * hv.QuadMesh([]).opts(
                 colorbar=plot_params['style']['show_colorbar'],
+                colorbar_position='left',
                 cmap=plot_params['style']['unflagged_cmap'],
                 responsive=True,
             )
@@ -708,17 +715,37 @@ class MsRaster(MsPlot):
         ''' Set gui options from ms data '''
         if 'data_dims' in self._ms_info:
             data_dims = self._ms_info['data_dims']
-
-            # Update options for x_axis and y_axis selectors
             axis_selectors = self._get_selector('axes')
-            axis_selectors.objects[0][0].options = data_dims
-            axis_selectors.objects[0][1].options = data_dims
+
+            # Update options for x_axis selector
+            x_axis_selector = axis_selectors.objects[0][0]
+            x_axis_value = x_axis_selector.value
+            x_axis_selector.options = data_dims
+            if x_axis_value in data_dims:
+                x_axis_selector.value = x_axis_value
+            else:
+                x_axis_selector.value = data_dims[1]
+
+            # Update options for y_axis selector
+            y_axis_selector = axis_selectors.objects[0][1]
+            y_axis_value = y_axis_selector.value
+            y_axis_selector.options = data_dims
+            if y_axis_value in data_dims:
+                y_axis_selector.value = y_axis_value
+            else:
+                y_axis_selector.value = data_dims[0]
 
             # Update options for vis_axis selector
+            vis_axis_selector = axis_selectors.objects[2]
+            vis_axis_value = vis_axis_selector.value
             if self._data.get_correlated_data('base') == 'SPECTRUM':
-                axis_selectors.objects[1].options = SPECTRUM_AXIS_OPTIONS
+                vis_axis_selector.options = SPECTRUM_AXIS_OPTIONS
             else:
-                axis_selectors.objects[1].options = VIS_AXIS_OPTIONS
+                vis_axis_selector.options = VIS_AXIS_OPTIONS
+            if vis_axis_value in vis_axis_selector.options:
+                vis_axis_selector.value = vis_axis_value
+            else:
+                vis_axis_selector.value = VIS_AXIS_OPTIONS[0]
 
             # Update options for selection selector
             selection_selectors = self._get_selector('sel')
@@ -840,6 +867,14 @@ class MsRaster(MsPlot):
             # Set button color
             button = self._gui_layout[2][2][0]
             button.button_style = 'solid' if inputs_changed else 'outline'
+
+    def _update_plot_inputs(self):
+        ''' Show inputs for raster plot in GUI '''
+        if self._plot_params:
+            inputs_column = self._gui_layout[0][1]
+            inputs_column.clear()
+            for param in self._plot_params:
+                inputs_column.append(pn.pane.Str(param))
 
     ###
     ### Callbacks for widgets which update plot inputs

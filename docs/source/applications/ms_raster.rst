@@ -60,12 +60,13 @@ Construct MsRaster Object
 `````````````````````````
 .. code:: python
 
-    >>> msr = MsRaster(ms=None, log_level='info', show_gui=False)
+    >>> msr = MsRaster(ms=None, log_level='info', log_to_file=True, show_gui=False)
 
 * ``ms`` (str): path to MSv2 (usually .ms extension) or MSv4 (usually .zarr
   extension) file. Required when show_gui=False.
 * ``log_level`` (str): logging threshold. Options include 'debug', 'info',
   'warning', 'error', 'critical'.
+* ``log_to_file`` (bool): whether to write log messages to a log file.
 * ``show_gui`` (bool): whether to launch the interactive GUI in a browser tab.
 
 MsRaster can be constructed with the ``ms`` path to a MSv2 or MSv4 file. If a
@@ -83,7 +84,9 @@ more information on the MSv4 data format, see the XRADIO
    without field partitioning prior to using MsRaster.
 
 The ``log_level`` can be set to the desired level, with log messages output to
-the Python console.  There is currently no log file option.
+the Python console.  When the ``log_to_file`` option is enabled (default), log
+messages will also be written to the file *msraster-<timestamp>.log* in the
+current directory.
 
 At construction, we decide whether to create the plots using MsRaster functions
 (``showgui=False``) or using the interactive GUI (``showgui=True``).  When the
@@ -470,6 +473,16 @@ To show the plot, :xref:`holoviews` renders the plot to a :xref:`bokeh` figure,
 then Bokeh ``show()`` saves the plot to an HTML file in a temporary directory
 and automatically opens the file in the browser.
 
+The plot is shown with two tabs at the upper left.  The first tab, which is
+active by default, contains the plot:
+
+.. image:: _static/show_plot.png
+
+The second tab shows the plot inputs (including automatic selections) used to
+make the raster plot, sorted alphabetically:
+
+.. image:: _static/show_plot_inputs.png
+
 .. _save_plot:
 
 Save Raster Plot
@@ -538,7 +551,8 @@ required.
     >>> msr = MsRaster(ms=None, log_level='info', show_gui=True)
 
 The GUI will immediately launch in a browser tab.  If ``ms`` is set, a plot with
-default parameters is created and shown in the GUI.
+default parameters is created and shown in the GUI. As with ``show()``, the plot
+is shown in a tab, with the inputs for the plot shown in the second tab:
 
 .. image:: _static/msraster_gui.png
 
@@ -573,4 +587,4 @@ inputs change. Click ``Plot`` to render the plot.
 
 .. note::
    The only way to create multiple plots in the GUI is by iteration. Iterated
-   plots in a layout will be shown in a Bokeh plot in a **new browser tab**.
+   plots **in a layout** will be shown in a **new browser tab**.
