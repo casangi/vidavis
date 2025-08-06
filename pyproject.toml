@@ -10,7 +10,6 @@ authors = [
 dependencies = [
     "bokeh==3.6.1",
     "hvplot",
-    "xradio>=0.0.56",
     "graphviper",
 ]
 requires-python = ">=3.11, <3.14"

@@ -25,10 +25,8 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-'''vidavis provides a number of python applications to visualize
-visibility data'''
-
-import os as __os
+'''vidavis provides python applications to visualize radio astronomy visibility
+data'''
 
 try:
     from .__version__ import __version__

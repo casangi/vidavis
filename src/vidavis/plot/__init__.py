@@ -1,1 +1,2 @@
-''' Module for plotting functions.  Currently supports MeasurementSet Xarray plots only. '''
+''' Module for plotting functions.  Currently supports MeasurementSetv4 Xarray
+plots only. '''

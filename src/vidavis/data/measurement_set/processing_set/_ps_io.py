@@ -34,10 +34,10 @@ def get_processing_set(ms_path, logger):
     if ext == ".zarr":
         zarr_path = ms_path
     else:
-        if not __HAVE_CASACORE:
-            raise RuntimeError("Cannot convert MSv2 to xradio zarr file: python-casacore not installed.")
         zarr_path = basename + ".ps.zarr"
         if not os.path.exists(zarr_path):
+            if not __HAVE_CASACORE:
+                raise RuntimeError("Cannot convert MSv2 to xradio zarr file: python-casacore not installed.")
             logger.info(f"Converting input MS {ms_path} to zarr {zarr_path}")
             convert_msv2_to_processing_set(
                 in_file=ms_path,

@@ -30,5 +30,3 @@
 from ._app_context import AppContext
 
 from ._logging import get_logger
-
-from ._static import static_vars, static_dir

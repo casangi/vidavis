@@ -4,7 +4,7 @@ Create panel widgets for various functions
 
 import panel as pn
 
-from vidavis.bokeh.state._palette import available_palettes
+from vidavis.bokeh._palette import available_palettes
 from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, AGGREGATOR_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS, DEFAULT_UNFLAGGED_CMAP, DEFAULT_FLAGGED_CMAP
 
 def file_selector(description, start_dir, callback):

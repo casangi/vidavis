@@ -10,7 +10,7 @@ import numpy as np
 import panel as pn
 from pandas import to_datetime
 
-from vidavis.bokeh.state._palette import available_palettes
+from vidavis.bokeh._palette import available_palettes
 from vidavis.plot.ms_plot._time_ticks import get_time_formatter
 from vidavis.plot.ms_plot._ms_plot import MsPlot
 from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS
