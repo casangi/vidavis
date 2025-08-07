@@ -34,9 +34,6 @@ Requirements
 - Optionally `python-casacore <https://pypi.org/project/python-casacore/>`_ or
   `casatools <https://pypi.org/project/casatools/>`_ for MSv2 conversion
 
-- Optionally `Selenium <https://www.selenium.dev/documentation/en/>`_ along with
-  a web driver to export to file using ``save()``
-
 Install
 ```````
 
@@ -52,25 +49,6 @@ To enable conversion from MSv2 to MSv4 with **python-casacore** use (this only w
 On macOS it is required to pre-install `python-casacore` using:
 
 - :code:`conda install -c conda-forge python-casacore`
-
-Exporting Plots
-^^^^^^^^^^^^^^^
-
-To enable exporting plots to file without showing the plot, using preferred web
-driver:
-
-**Selenium** with **geckodriver** and **Firefox** (to ensure compatible versions):
-
-- :code:`conda install -c conda-forge selenium firefox geckodriver`
-
-**Selenium** with **ChromeDriver** (Chrome), with the executable
-**chromedriver** in your PATH:
-
-- :code:`conda install -c conda-forge selenium python-chromedriver-binary`
-
-or:
-
-- :code:`pip install selenium chromedriver-binary`
 
 Simple MsRaster Usage Example
 `````````````````````````````

@@ -70,9 +70,11 @@ Construct MsRaster Object
 * ``show_gui`` (bool): whether to launch the interactive GUI in a browser tab.
 
 MsRaster can be constructed with the ``ms`` path to a MSv2 or MSv4 file. If a
-MSv2 path is supplied, it will automatically be converted to the MSv4 zarr
-format in the same directory as the MSv2 with the extension **.ps.zarr**. For
-more information on the MSv4 data format, see the XRADIO
+MSv2 path is supplied and the correct dependencies have been installed
+separately (see :ref:`install_conversion`), the MSv2 will automatically be
+converted to the MSv4 zarr format in the same directory as the MSv2, with the
+extension **.ps.zarr**. For more information on the MSv4 data format, see the
+XRADIO
 `Measurement Set Tutorial <https://xradio.readthedocs.io/en/latest/measurement_set/tutorials/measurement_set_tutorial.html>`_.
 
 .. warning::
@@ -88,7 +90,7 @@ the Python console.  When the ``log_to_file`` option is enabled (default), log
 messages will also be written to the file *msraster-<timestamp>.log* in the
 current directory.
 
-At construction, we decide whether to create the plots using MsRaster functions
+At construction, set whether plots will be constructed using MsRaster functions
 (``showgui=False``) or using the interactive GUI (``showgui=True``).  When the
 GUI is shown, using MsRaster functions does not update the GUI widget selections
 or the plot. The ``ms`` parameter is required when ``showgui=False``, but
@@ -497,22 +499,25 @@ After a plot is created (see :ref:`create_plot`), it may be saved to a file with
   as {ms}_raster.{ext}. If fmt is not set, plot will be saved as .png.
 * ``fmt`` (str): Format of file to save ('png', 'html', or 'gif'). Default
   'auto': inferred from filename extension.
-* ``width`` (int): width of exported plot.
-* ``height`` (int): height of exported plot.
+* ``width`` (int): width of exported plot in pixels.
+* ``height`` (int): height of exported plot in pixels.
 
 As in :ref:`show_plot`, multiple plots can be saved in a layout using the
-``subplots`` parameter in the :ref:`create_plot` ``plot()`` function. This
-layout plot will be saved to a single file with ``filename``.
+``subplots`` parameter in the :ref:`create_plot` ``plot()`` function. Each plot
+in the layout will have size *(width, height)* resulting in a layout plot of
+size *(width * columns, height * rows)* pixels. This layout plot is saved to a
+single file with ``filename``.
 
 However, if iteration plots were created and ``subplots`` is a single plot
 (None or (1, 1)), the iteration plots will be saved individually with a plot
 index appended to the filename according to the ``iter_range`` index range:
-{``filename``}_{index}.{ext}.
+*{filename}_{index}.{ext}*.
 
 When ``save()`` is called, as with ``show()`` the plot is exported to an HTML
-file. If the file format is .png, the exported plot will be rendered as a
-PNG, which currently requires Selenium and either firefox and geckodriver
-or chromium browser and chromedriver (see :ref:`install_msraster`).
+file.  When ``fmt`` is 'png', the plot is rendered in memory then a screenshot is
+captured to create a PNG file. For 'svg' export, Bokeh replaces the HTML5 Canvas
+plot output with a Scalable Vector Graphics (SVG) element that can be edited in
+image editing programs such as Adobe Illustrator and/or converted to PDF.
 
 .. warning::
    If you have rendered the plot with ``show()``, it is much faster to save

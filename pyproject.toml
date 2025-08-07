@@ -9,8 +9,10 @@ authors = [
 
 dependencies = [
     "bokeh==3.6.1",
+    "matplotlib",
     "hvplot",
     "graphviper",
+    "selenium"
 ]
 requires-python = ">=3.11, <3.14"
 readme = "readme.rst"

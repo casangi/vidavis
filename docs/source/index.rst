@@ -6,10 +6,11 @@
 Visibility Data Visualization
 =============================
 
-The :code:`vidavis` (VIsibility DAta VISualization) package provides graphical
-user interfaces to replace the :xref:`casa` MeasurementSet visibility plotters.
-This new generation of interfaces, which are implemented in Python, will be
-based on :xref:`bokeh` and will use web browsers for display.
+The :code:`vidavis` (VIsibility DAta VISualization) package provides
+applications with optional graphical user interfaces to replace the :xref:`casa`
+MeasurementSet visibility plotters. This new generation of applications, which
+are implemented in Python, will create plots based on :xref:`bokeh` and will use
+web browsers for display.
 
 There are two basic documentation sections. The primary section describes the
 applications that are provided by :code:`vidavis`. The second section describes

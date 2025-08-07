@@ -244,10 +244,13 @@ class MsRaster(MsPlot):
         Args:
             filename (str): Name of file to save. Default '': the plot will be saved as {ms}_raster.{ext}.
                 If fmt is not set for extension, plot will be saved as .png.
-            fmt (str): Format of file to save ('png', 'html', or 'gif').
+            fmt (str): Format of file to save ('png', 'svg', or 'html').
                 Default 'auto': inferred from filename extension.
-            width (int): width of exported plot.
-            height (int): height of exported plot.
+            width (int): width of exported plot in pixels.
+            height (int): height of exported plot in pixels.
+
+        If subplots defines a grid layout, width and height describe the size of each plot in the layout.
+            The layout plot size will be (width * columns, height * rows) pixels.
 
         If iteration plots were created:
             If subplots is a grid, the layout plot will be saved to a single file.
