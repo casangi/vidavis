@@ -11,7 +11,6 @@ import hvplot
 import holoviews as hv
 import numpy as np
 import panel as pn
-#import pdb
 from selenium import webdriver
 
 try:
@@ -223,8 +222,8 @@ class MsPlot:
 
         try:
             hvplot.save(plot, filename=filename, fmt=fmt)
-        except RuntimeError as exc:
-            # Fails if hvplot cannot find web driver.
+        except (Exception, RuntimeError) as exc:
+            # Fails if hvplot cannot find web driver or fmt is svg.
             # Render a Bokeh Figure or GridPlot, create webdriver, then use Bokeh to export.
             fig = hv.render(plot)
             if fmt=='html':
