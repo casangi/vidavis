@@ -5,11 +5,14 @@ Base class for ms plots
 import os
 import time
 
-from bokeh.plotting import show
+from bokeh.io import export_png, export_svg
+from bokeh.plotting import save, show
 import hvplot
 import holoviews as hv
 import numpy as np
 import panel as pn
+#import pdb
+from selenium import webdriver
 
 try:
     from toolviper.utils.logger import get_logger, setup_logger
@@ -140,27 +143,21 @@ class MsPlot:
         self._plots_locked = True
 
         # Single plot or combine plots into layout using subplots (rows, columns)
-        # Not layout if subplots is single plot (default if None) or if only one plot saved
-        subplots = self._plot_inputs['subplots']
-        layout_plot, is_layout = self._layout_plots(subplots)
+        layout_plot = self._layout_plots(self._plot_inputs['subplots'])
 
-        # Render to bokeh figure
-        if is_layout:
-            # Show plots in columns
-            plot = hv.render(layout_plot.cols(subplots[1]))
-        else:
-            # Show single plot
-            plot = hv.render(layout_plot)
+        # Render plot as Bokeh Figure or GridPlot
+        bokeh_fig = hv.render(layout_plot)
 
         self._plots_locked = False
         if self._plot_params:
+            # Show plot and plot inputs in tabs
             column = pn.Column()
             for param in self._plot_params:
                 column.append(pn.pane.Str(param))
-            tabs = pn.Tabs(('Plot', plot), ('Plot Inputs', column))
+            tabs = pn.Tabs(('Plot', bokeh_fig), ('Plot Inputs', column))
             tabs.show(title=self._app_name, threaded=True)
         else:
-            show(plot)
+            show(bokeh_fig)
 
     def save(self, filename='ms_plot.png', fmt='auto', width=900, height=600):
         '''
@@ -175,51 +172,78 @@ class MsPlot:
 
         start_time = time.time()
 
-        # Save single plot or combine plots into layout using subplots (rows, columns).
-        # Not layout if subplots is single plot or if only one plot saved.
-        subplots = self._plot_inputs['subplots']
-        layout_plot, is_layout = self._layout_plots(subplots)
+        name, ext = os.path.splitext(filename)
+        fmt = ext[1:] if fmt=='auto' else fmt
 
-        if is_layout:
-            # Save plots combined into one layout
-            hvplot.save(layout_plot.cols(subplots[1]), filename=filename, fmt=fmt)
-            self._logger.info("Saved plot to %s.", filename)
+        # Combine plots into layout using subplots (rows, columns) if not single plot.
+        # Set fixed size for export.
+        layout_plot = self._layout_plots(self._plot_inputs['subplots'], (width, height))
+
+        if not isinstance(layout_plot, hv.Layout) and self._plot_inputs['iter_axis']:
+            # Save iterated plots individually, with index appended to filename
+            plot_idx = 0 if self._plot_inputs['iter_range'] is None else self._plot_inputs['iter_range'][0]
+            for plot in self._plots:
+                exportname = f"{name}_{plot_idx}{ext}"
+                self._save_plot(plot, exportname, fmt)
+                plot_idx += 1
         else:
-            # Save plots individually, with index appended if exprange='all' and multiple plots.
-            if self._plot_inputs['iter_axis'] is None:
-                hvplot.save(layout_plot.opts(width=width, height=height), filename=filename, fmt=fmt)
-                self._logger.info("Saved plot to %s.", filename)
-            else:
-                name, ext = os.path.splitext(filename)
-                iter_range = self._plot_inputs['iter_range'] # None or (start, end)
-                plot_idx = 0 if iter_range is None else iter_range[0]
-
-                for plot in self._plots:
-                    exportname = f"{name}_{plot_idx}{ext}"
-                    hvplot.save(plot.opts(width=width, height=height), filename=exportname, fmt=fmt)
-                    self._logger.info("Saved plot to %s.", exportname)
-                    plot_idx += 1
-
+            self._save_plot(layout_plot, filename, fmt)
         self._logger.debug("Save elapsed time: %.2fs.", time.time() - start_time)
 
-    def _layout_plots(self, subplots):
+    def _layout_plots(self, subplots, fixed_size=None):
+        ''' Combine plots in a layout, using fixed size for the layout if given '''
         subplots = (1, 1) if subplots is None else subplots
-        num_plots = len(self._plots)
-        num_layout_plots = min(num_plots, np.prod(subplots))
+        num_plots = min(len(self._plots), np.prod(subplots))
+        plot_width = fixed_size[0] if fixed_size else None
+        plot_height = fixed_size[1] if fixed_size else None
 
-        if num_layout_plots == 1:
-            return self._plots[0], False
+        if num_plots == 1:
+            # Single plot, not layout
+            plot = self._plots[0]
+            if fixed_size:
+                plot = plot.opts(responsive=False, width=plot_width, height=plot_height, clone=True)
+            return plot
 
         # Set plots in layout
-        plot_count = 0
-        layout = None
-        for i in range(num_layout_plots):
+        layout_plot = None
+        for i in range(num_plots):
             plot = self._plots[i]
-            layout = plot if layout is None else layout + plot
-            plot_count += 1
+            if fixed_size:
+                plot = plot.opts(responsive=False, width=plot_width, height=plot_height, clone=True)
+            layout_plot = plot if layout_plot is None else layout_plot + plot
 
-        is_layout = plot_count > 1
-        return layout, is_layout
+        # Layout in columns
+        return layout_plot.cols(subplots[1])
+
+    def _save_plot(self, plot, filename, fmt):
+        ''' Save plot using hvplot, else bokeh '''
+        # Remove toolbar unless html
+        toolbar = 'right' if fmt=='html' else None
+        plot = plot.opts(toolbar=toolbar, clone=True)
+
+        try:
+            hvplot.save(plot, filename=filename, fmt=fmt)
+        except RuntimeError as exc:
+            # Fails if hvplot cannot find web driver.
+            # Render a Bokeh Figure or GridPlot, create webdriver, then use Bokeh to export.
+            fig = hv.render(plot)
+            if fmt=='html':
+                save(fig, filename)
+            elif fmt in ['png', 'svg']:
+                # Use Chrome web driver
+                service = webdriver.ChromeService()
+                options = webdriver.ChromeOptions()
+                options.add_argument('--headless')
+                options.add_argument('--no-sandbox')
+
+                with webdriver.Chrome(service=service, options=options) as driver:
+                    if fmt=='png':
+                        export_png(fig, filename=filename, webdriver=driver)
+                    elif fmt=='svg':
+                        export_svg(fig, filename=filename, webdriver=driver)
+            else:
+                raise ValueError(f"Invalid fmt or filename extension {fmt} for save()") from exc
+        self._logger.info("Saved plot to %s.", filename)
 
     def _set_ms(self, ms_path):
         ''' Set MsData and update ms info for input ms filepath (MSv2 or zarr), if set.

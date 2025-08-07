@@ -52,7 +52,7 @@ data I/O, logging, plotting, and interactive dashboards:
   overlay plots
 
 * Holoviz library :xref:`panel` streamlines the development of apps and
-  dashboards for the raster plots
+  dashboards for the plots
 
 Implementation
 --------------
@@ -85,17 +85,15 @@ Requirements
 
 - Python 3.11 or greater
 
-Many packages are automatically installed as ``vidavis`` dependencies,
+The required dependency packages are automatically installed with ``vidavis``,
 including those listed in the :ref:`Infrastructure` section.
 
 Optionally, :xref:`xradio` with
 `python-casacore <https://casacore.github.io/python-casacore/>`_
 or `casatools <https://casadocs.readthedocs.io/en/stable/api/casatools.html>`_
-is required to enable conversion from MSv2 to MSv4. To export plots to file
-using ``save()``, additional packages are required: **geckodriver** for firefox,
-or **chromedriver** for chromium. See below for installation instructions.
+is required to enable conversion from MSv2 to MSv4 in the applications.
 
-.. _install_msraster:
+.. _install_vidavis:
 
 Install vidavis
 ```````````````
@@ -110,6 +108,8 @@ self-contained runtime where vidavis and its dependencies can be installed::
 Install required packages::
 
   pip install vidavis
+
+.. _install_conversion:
 
 Install for MSv2 Conversion
 ```````````````````````````
@@ -127,33 +127,6 @@ It is also possible to use
 as the backend for reading the MSv2. See the
 `XRADIO casatools setup guide <https://xradio.readthedocs.io/en/latest/measurement_set/guides/backends.html>`_
 for more information.
-
-Install for Exporting Plots
-```````````````````````````
-
-Additional packages are required to export plots to file using ``save()`` rather
-than the save tool in the interactive :xref:`bokeh` plots shown in the browser.
-Install `Selenium <https://www.selenium.dev/documentation/en/>`_ along with a
-web driver.
-
-**Choose one**:
-
-**Selenium** with **geckodriver** and **Firefox** (to ensure compatible versions)::
-
-  conda install -c conda-forge selenium firefox geckodriver
-
-**Selenium** with **ChromeDriver** (Chrome), with the executable
-**chromedriver** in your PATH::
-
-  conda install -c conda-forge selenium python-chromedriver-binary
-
-or::
-
-  pip install selenium chromedriver-binary
-
-For more information, see the
-`Bokeh export dependencies <https://docs.bokeh.org/en/3.6.3/docs/user_guide/output/export.html#ug-output-export-dependencies>`_
-documentation.
 
 Dask.distributed Scheduler
 --------------------------
