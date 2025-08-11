@@ -42,11 +42,11 @@ Install
 MSv2 Conversion
 ^^^^^^^^^^^^^^^
 
-To enable conversion from MSv2 to MSv4 with **python-casacore** use (this only works for Linux):
+To enable conversion from MSv2 to MSv4 with **python-casacore** for Linux only:
 
 - :code:`pip install "xradio[python-casacore]"`
 
-On macOS it is required to pre-install `python-casacore` using:
+On macOS it is required to pre-install **python-casacore**:
 
 - :code:`conda install -c conda-forge python-casacore`
 

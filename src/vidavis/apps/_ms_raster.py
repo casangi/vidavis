@@ -11,9 +11,10 @@ import panel as pn
 from pandas import to_datetime
 
 from vidavis.bokeh._palette import available_palettes
+from vidavis.data.measurement_set.processing_set._ps_coords import set_index_coordinates
 from vidavis.plot.ms_plot._time_ticks import get_time_formatter
 from vidavis.plot.ms_plot._ms_plot import MsPlot
-from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS
+from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS, TIME_FORMAT
 from vidavis.plot.ms_plot._ms_plot_selectors import (file_selector, title_selector, style_selector, axis_selector,
 aggregation_selector, iteration_selector, selection_selector, plot_starter)
 from vidavis.plot.ms_plot._raster_plot_inputs import check_inputs
@@ -43,6 +44,7 @@ class MsRaster(MsPlot):
     def __init__(self, ms=None, log_level="info", log_to_file=True, show_gui=False):
         super().__init__(ms, log_level, log_to_file, show_gui, "MsRaster")
         self._raster_plot = RasterPlot()
+        self._plot_data = None
 
         # Calculations for color limits
         self._spw_stats = {}
@@ -67,6 +69,7 @@ class MsRaster(MsPlot):
             self.set_style_params()
             self.plot()
             self._launch_gui()
+            self._last_cursor = None
 
             # Set filename TextInput to input ms to trigger plot
             if 'ms' in self._ms_info and self._ms_info['ms']:
@@ -273,6 +276,7 @@ class MsRaster(MsPlot):
 
         # Select vis_axis data to plot and update selection; returns xarray Dataset
         raster_data = self._data.get_raster_data(plot_inputs)
+        self._plot_data = raster_data
 
         # Add params needed for plot: auto color range and ms name
         self._set_auto_color_range(plot_inputs) # set calculated limits if auto mode
@@ -432,14 +436,9 @@ class MsRaster(MsPlot):
         # Select style - colormaps, colorbar, color limits
         style_selectors = style_selector(self._set_style_params, self._set_color_range)
 
-        # Set title
-        title_input = title_selector(self._set_title)
-
         # Select x, y, and vis axis
-        x_axis = self._plot_inputs['x_axis']
-        y_axis = self._plot_inputs['y_axis']
         data_dims = self._ms_info['data_dims'] if 'data_dims' in self._ms_info else None
-        axis_selectors = axis_selector(x_axis, y_axis, data_dims, True, self._set_axes)
+        axis_selectors = axis_selector(self._plot_inputs['x_axis'], self._plot_inputs['y_axis'], data_dims, True, self._set_axes)
 
         # Select from ProcessingSet and MeasurementSet
         selection_selectors = selection_selector(self._set_ps_selection, self._set_ms_selection)
@@ -453,7 +452,10 @@ class MsRaster(MsPlot):
         # Select iter_axis and iter value or range
         iter_selectors = iteration_selector(axis_options, self._set_iter_values, self._set_iteration)
 
-        # Put user input widgets in accordion with only one card active at a time
+        # Set title
+        title_input = title_selector(self._set_title)
+
+        # Put user input widgets in accordion with only one card active at a time (toggle)
         selectors = pn.Accordion(
             ("Select file", file_selectors),         # [0]
             ("Plot style", style_selectors),         # [1]
@@ -468,27 +470,38 @@ class MsRaster(MsPlot):
         # Plot button and spinner while plotting
         init_plot = plot_starter(self._update_plot_spinner)
 
-        # Connect plot to filename and selector widgets
+        # Connect plot to filename and plot button; add pointer stream for cursor info
         dmap = hv.DynamicMap(
             pn.bind(
                 self._update_plot,
                 ms=file_selectors[0][0],
                 do_plot=init_plot[0],
             ),
+            streams=[hv.streams.PointerXY()] # for cursor location
         )
+
+        # Area for cursor location
+        cursor_location = pn.WidgetBox()
 
         # Layout plot and input widgets in a row
         self._gui_layout = pn.Row(
-            pn.Tabs(             # [0]
-                ('Plot', dmap),               # [0]
-                ('Plot Inputs', pn.Column()), # [1]
+            pn.Tabs( # Row [0]
+                ('Plot',        # Tabs [0]
+                    pn.Column(
+                        dmap,            # [0]
+                        cursor_location, # [1]
+                    )
+                ),
+                ('Plot Inputs', # Tabs [1]
+                    pn.Column() # [0]
+                ),
                 sizing_mode='stretch_width',
             ),
-            pn.Spacer(width=10), # [1]
-            pn.Column(           # [2]
-                pn.Spacer(height=25), # [0]
-                selectors,            # [1]
-                init_plot,            # [2]
+            pn.Spacer(width=10), # Row [1]
+            pn.Column(           # Row [2]
+                pn.Spacer(height=25), # Column [0]
+                selectors,            # Column [1]
+                init_plot,            # Column [2]
                 width_policy='min',
                 width=400,
                 sizing_mode='stretch_height',
@@ -503,8 +516,10 @@ class MsRaster(MsPlot):
     ###
     ### Main callback to create plot if inputs changed
     ###
-    def _update_plot(self, ms, do_plot):
-        ''' Create plot with inputs from GUI.  Must return plot, even if empty plot, for DynamicMap. '''
+    def _update_plot(self, ms, do_plot, x, y):
+        ''' Create plot with inputs from GUI, or update cursor (x, y) information.
+            Must return plot, even if empty plot or same plot as before, for DynamicMap.
+        '''
         if self._toast:
             self._toast.destroy()
 
@@ -513,12 +528,18 @@ class MsRaster(MsPlot):
             # Launched GUI with no MS
             return self._empty_plot
 
-        # If not first plot, user has to click Plot button (do_plot=True).
+        # If not first plot, user has to click Plot button (do_plot=True) to update plot.
+        # Respond to pointer callback only.
         first_plot = not self._last_gui_plot
         if not do_plot and not first_plot:
+            if not self._last_cursor or (self._last_cursor[0] != x or self._last_cursor[1] != y):
+                # Callback is for new cursor location
+                self._update_cursor_location(x, y)
+                self._last_cursor = (x, y)
             # Not ready to update plot yet, return last plot.
             return self._last_gui_plot
 
+        # Callback is for initial plot for input ms, or user clicked Plot button
         if (self._set_ms(ms) or first_plot) and self._data and self._data.is_valid():
             # New MS set and is valid
             self._update_gui_axis_options()
@@ -814,7 +835,6 @@ class MsRaster(MsPlot):
             #filename_input.width = len(filename[-1])
             filename_input.value = filename[-1]
 
-
     def _set_iter_values(self, iter_axis):
         ''' Set up player with values when iter_axis is selected '''
         iter_axis = None if iter_axis == 'None' else iter_axis
@@ -878,6 +898,102 @@ class MsRaster(MsPlot):
             inputs_column.clear()
             for param in self._plot_params:
                 inputs_column.append(pn.pane.Str(param))
+
+    def _update_cursor_location(self, x, y):
+        ''' Show metadata for cursor x,y position '''
+        # Convert plot values to selection values to select plot data
+        x_axis = self._plot_inputs['x_axis']
+        y_axis = self._plot_inputs['y_axis']
+        x = round(x) if x_axis == 'baseline' else x
+        y = round(y) if y_axis == 'baseline' else y
+        position = {x_axis: x, y_axis: y}
+
+        location_info = self._get_cursor_location(position)
+        self._update_cursor_widget(location_info)
+
+    def _get_cursor_location(self, position):
+        ''' Return coord and data var values for position dict {x_axis: x, y_axis: y} '''
+        x_axis, y_axis = position.keys()
+        values = position.copy()
+        units = {}
+
+        if self._plot_data:
+            try:
+                xds = set_index_coordinates(self._plot_data, (x_axis, y_axis))
+                sel_xds = xds.sel(indexers=None, method='nearest', tolerance=None, drop=False, **position)
+                for coord in sel_xds.coords:
+                    if coord != 'uvw_label':
+                        val, unit = self._get_xda_val_unit(sel_xds[coord])
+                        values[coord] = val
+                        units[coord] = unit
+                for data_var in sel_xds.data_vars:
+                    val, unit = self._get_xda_val_unit(sel_xds[data_var])
+                    if data_var == 'UVW':
+                        names = ['U', 'V', 'W']
+                        for i, name in enumerate(names):
+                            values[name] = val[i]
+                            units[name] = unit[i]
+                    else:
+                        values[data_var] = val
+                        units[data_var] = unit
+            except KeyError:
+                pass
+
+        # Set complex component name for visibilities
+        if 'VISIBILITY' in values:
+            values[self._plot_inputs['vis_axis'].capitalize()] = values.pop('VISIBILITY')
+        return (values, units)
+
+    def _update_cursor_widget(self, location_info):
+        ''' Update cursor location widget box with info in dict '''
+        values, units = location_info
+        cursor_location = self._gui_layout[0][0][1] # pn.WidgetBox
+        cursor_location.clear()
+        location_layout = pn.Column(pn.widgets.StaticText(name="Cursor Location"))
+        info_row = pn.Row()
+        info_col = pn.Column()
+
+        for name, value in values.items():
+            # 4 entries per column; append to row and start new column
+            if len(info_col.objects) == 4:
+                info_row.append(info_col)
+                info_col = pn.Column()
+
+            if not isinstance(value, str):
+                if name == "FLAG":
+                    value = "nan" if np.isnan(value) else int(value)
+                elif isinstance(value, float):
+                    if np.isnan(value):
+                        value = "nan"
+                    elif value < 1e6:
+                        value = f"{value:.4f}"
+                    else:
+                        value = f"{value:.4e}"
+                elif isinstance(value, np.datetime64):
+                    value = to_datetime(np.datetime_as_string(value)).strftime(TIME_FORMAT)
+                    units.pop(name) # no unit for datetime string
+            unit = units[name] if name in units else ""
+            info = pn.widgets.StaticText(name=name, value=f"{value} {unit}")
+            info.margin = (0, 10) # default (5, 10)
+            info_col.append(info)
+        info_row.append(info_col)
+        location_layout.append(info_row)
+        cursor_location.append(location_layout)
+
+    def _get_xda_val_unit(self, xda):
+        ''' Get value and unit as str not list '''
+        # Value
+        val = xda.values
+        if isinstance(val, np.ndarray) and val.size == 1:
+            val = val.item()
+        # Unit
+        try:
+            unit = xda.attrs['units']
+            unit = unit[0] if (isinstance(unit, list) and len(unit) == 1) else unit
+            unit = '' if unit == 'unkown' else unit
+        except KeyError:
+            unit = ''
+        return val, unit
 
     ###
     ### Callbacks for widgets which update plot inputs
