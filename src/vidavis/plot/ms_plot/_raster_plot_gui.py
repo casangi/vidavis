@@ -71,8 +71,8 @@ def create_raster_gui(callbacks, data_dims, x_axis, y_axis):
         pn.Tabs(             # Row [0]
             ('Plot',
                 pn.Column(                # Tabs [0]
-                    dmap,         # [0]
-                    pn.WidgetBox, # [1] cursor location
+                    dmap,           # [0]
+                    pn.WidgetBox(), # [1] cursor location
                 )
             ),
             ('Plot Inputs', pn.Column()), # Tabs [1]

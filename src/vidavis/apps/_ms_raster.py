@@ -50,9 +50,6 @@ class MsRaster(MsPlot):
         self._spw_color_limits = {}
 
         if show_gui:
-            # GUI based on panel widgets
-            self._gui_layout = None
-
             # For checking if plot inputs or cursor position changed and new plot or cursor location info is needed.
             self._last_plot_inputs = None
             self._last_style_inputs = None
@@ -833,8 +830,7 @@ class MsRaster(MsPlot):
         y = round(y) if y_axis == 'baseline' else y
         position = {x_axis: x, y_axis: y}
         location_values, units = self._get_cursor_location_values(position)
-        cursor_location_box = self._gui_layout[0][0][1]
-        self._update_cursor_widget(cursor_location_box, location_values, units)
+        self._update_cursor_box(location_values, units)
 
     def _get_cursor_location_values(self, cursor_position):
         values = cursor_position.copy()
@@ -867,9 +863,10 @@ class MsRaster(MsPlot):
             values[self._plot_inputs['vis_axis'].capitalize()] = values.pop('VISIBILITY')
         return values, units
 
-    def _update_cursor_widget(self, cursor_location, location_values, units):
+    def _update_cursor_box(self, location_values, units):
         ''' Update cursor location widget box with info in dict '''
-        cursor_location.clear() # pn.WidgetBox
+        cursor_location_box = self._gui_layout[0][0][1]
+        cursor_location_box.clear() # pn.WidgetBox
         location_layout = pn.Column(pn.widgets.StaticText(name="Cursor Location"))
         info_row = pn.Row()
         info_col = pn.Column()
@@ -899,7 +896,7 @@ class MsRaster(MsPlot):
             info_col.append(info)
         info_row.append(info_col)
         location_layout.append(info_row)
-        cursor_location.append(location_layout)
+        cursor_location_box.append(location_layout)
 
     def _get_xda_val_unit(self, xda):
         ''' Get value and unit as str not list '''

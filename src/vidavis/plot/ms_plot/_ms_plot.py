@@ -59,6 +59,9 @@ class MsPlot:
         self._plots_locked = False
         self._plots = []
 
+        # Initialize gui
+        self._gui_layout = None
+
         # Set data (if ms)
         self._data = None
         self._ms_info = {}
@@ -144,7 +147,7 @@ class MsPlot:
         # Single plot or combine plots into layout using subplots (rows, columns)
         layout_plot = self._layout_plots(self._plot_inputs['subplots'])
 
-        # Render plot as Bokeh Figure or GridPlot
+        # Render plot as Bokeh Figure or GridPlot so can show() in script without tying up thread
         bokeh_fig = hv.render(layout_plot)
 
         self._plots_locked = False
