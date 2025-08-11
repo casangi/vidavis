@@ -7,16 +7,15 @@ import time
 from bokeh.models.formatters import NumeralTickFormatter
 import holoviews as hv
 import numpy as np
-import panel as pn
 from pandas import to_datetime
+import panel as pn
 
 from vidavis.bokeh._palette import available_palettes
 from vidavis.data.measurement_set.processing_set._ps_coords import set_index_coordinates
 from vidavis.plot.ms_plot._time_ticks import get_time_formatter
 from vidavis.plot.ms_plot._ms_plot import MsPlot
 from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS, TIME_FORMAT
-from vidavis.plot.ms_plot._ms_plot_selectors import (file_selector, title_selector, style_selector, axis_selector,
-aggregation_selector, iteration_selector, selection_selector, plot_starter)
+from vidavis.plot.ms_plot._raster_plot_gui import create_raster_gui
 from vidavis.plot.ms_plot._raster_plot_inputs import check_inputs
 from vidavis.plot.ms_plot._raster_plot import RasterPlot
 
@@ -54,14 +53,14 @@ class MsRaster(MsPlot):
             # GUI based on panel widgets
             self._gui_layout = None
 
-            # Check if plot inputs changed and new plot is needed.
-            # GUI can change subparams which do not change plot
+            # For checking if plot inputs or cursor position changed and new plot or cursor location info is needed.
             self._last_plot_inputs = None
             self._last_style_inputs = None
-            # Last plot when no new plot created (plot inputs same) or is iter Layout plot (opened in tab)
-            self._last_gui_plot = None
+            self._last_cursor = None
 
             # Return plot for gui DynamicMap:
+            # Last plot when no new plot created (plot inputs same) or is iter Layout plot (opened in tab)
+            self._last_gui_plot = None
             # Empty plot when ms not set or plot fails
             self._empty_plot = self._create_empty_plot()
 
@@ -69,7 +68,6 @@ class MsRaster(MsPlot):
             self.set_style_params()
             self.plot()
             self._launch_gui()
-            self._last_cursor = None
 
             # Set filename TextInput to input ms to trigger plot
             if 'ms' in self._ms_info and self._ms_info['ms']:
@@ -168,25 +166,14 @@ class MsRaster(MsPlot):
             x_axis (str): Plot x-axis. Default 'baseline' ('antenna_name' for spectrum data).
             y_axis (str): Plot y-axis. Default 'time'.
             vis_axis (str): Complex visibility component to plot (amp, phase, real, imag). Default 'amp'.
-                Call data_groups() to see options.
-                MeasurementSet selection:
-                    'data_group': name for correlated data, flags, weights, and uvw. Default value 'base'.
-                        Use data_groups() to get data group names.
-                    Dimensions:
-                        Visibility dimensions: 'baseline' 'time', 'frequency', 'polarization'
-                        Spectrum dimensions: 'antenna_name', 'time', 'frequency', 'polarization'
-                        Default value is index 0 (after user selection) for non-axis dimensions unless aggregated.
-                        Use antennas() to get antenna names. Select 'baseline' as "<name1> & <name2>".
-                        Use summary() to list frequencies and polarizations.
-                        TODO: how to select time?
-            aggregator (str): reduction for rasterization. Default None.
+            aggregator (None, str): reduction for rasterization. Default None.
                 Options include 'max', 'mean', 'min', 'std', 'sum', 'var'.
-            agg_axis (str, list): which dimension to apply aggregator across. Default None.
+            agg_axis (None, str, list): which dimension to apply aggregator across. Default None.
                 Options include one or more dimensions.
                 If agg_axis is None and aggregator is set, aggregates over all non-axis dimensions.
                 If one agg_axis is selected, the non-agg dimension will be selected.
-            iter_axis (str): dimension over which to iterate values (using iter_range).
-            iter_range (tuple): (start, end) inclusive index values for iteration plots.
+            iter_axis (None, str): dimension over which to iterate values (using iter_range).
+            iter_range (None, tuple): (start, end) inclusive index values for iteration plots.
                 Default (0, 0) (first iteration only). Use (0, -1) for all iterations.
                 If subplots is a grid, the range is limited by the grid size.
                 If subplots is a single plot, all iteration plots in the range can be saved using export_range in save().
@@ -197,12 +184,12 @@ class MsRaster(MsPlot):
                 Options include None (use data limits), 'auto' (calculate limits for amplitude), and 'manual' (use range in color_range).
                 'auto' is equivalent to None if vis_axis is not 'amp'.
                 When subplots is set, the 'auto' or 'manual' range will be used for all plots.
-            color_range (tuple): (min, max) of colorbar to use if color_mode is 'manual'.
-            title (str): Plot title, default None (no title)
+            color_range (None, tuple): (min, max) of colorbar to use if color_mode is 'manual'.
+            title (None, str): Plot title, default None (no title)
                 Set title='ms' to generate title from ms name and iter_axis value, if any.
             clear_plots (bool): whether to clear list of plots. Default True.
 
-        If not show_gui and plotting is successful, use show() or save() to view/save the plot only.
+        If plot is successful, use show() or save() to view/save the plot.
         '''
         inputs = locals() # collect arguments into dict (not unused as pylint complains!)
         if self._plot_inputs['selection']:
@@ -430,87 +417,25 @@ class MsRaster(MsPlot):
     ### -----------------------------------------------------------------------
     def _launch_gui(self):
         ''' Use Holoviz Panel to create a dashboard for plot inputs. '''
-        # Select MS
-        file_selectors = file_selector('Path to MeasurementSet (ms or zarr) for plot', '~' , self._set_filename)
-
-        # Select style - colormaps, colorbar, color limits
-        style_selectors = style_selector(self._set_style_params, self._set_color_range)
-
-        # Select x, y, and vis axis
+        callbacks = {
+            'filename': self._set_filename,
+            'style': self._set_style_params,
+            'color': self._set_color_range,
+            'axes': self._set_axes,
+            'select_ps': self._set_ps_selection,
+            'select_ms': self._set_ms_selection,
+            'aggregation': self._set_aggregation,
+            'iter_values': self._set_iter_values,
+            'iteration': self._set_iteration,
+            'title': self._set_title,
+            'plot_updating': self._update_plot_spinner,
+            'update_plot': self._update_plot,
+        }
         data_dims = self._ms_info['data_dims'] if 'data_dims' in self._ms_info else None
-        axis_selectors = axis_selector(self._plot_inputs['x_axis'], self._plot_inputs['y_axis'], data_dims, True, self._set_axes)
-
-        # Select from ProcessingSet and MeasurementSet
-        selection_selectors = selection_selector(self._set_ps_selection, self._set_ms_selection)
-
-        # Generic axis options, updated when ms is set
-        axis_options = data_dims if data_dims else []
-
-        # Select aggregator and axes to aggregate
-        agg_selectors = aggregation_selector(axis_options, self._set_aggregation)
-
-        # Select iter_axis and iter value or range
-        iter_selectors = iteration_selector(axis_options, self._set_iter_values, self._set_iteration)
-
-        # Set title
-        title_input = title_selector(self._set_title)
-
-        # Put user input widgets in accordion with only one card active at a time (toggle)
-        selectors = pn.Accordion(
-            ("Select file", file_selectors),         # [0]
-            ("Plot style", style_selectors),         # [1]
-            ("Data Selection", selection_selectors), # [2]
-            ("Plot axes", axis_selectors),           # [3]
-            ("Aggregation", agg_selectors),          # [4]
-            ("Iteration", iter_selectors),           # [5]
-            ("Plot title", title_input),             # [6]
-        )
-        selectors.toggle = True
-
-        # Plot button and spinner while plotting
-        init_plot = plot_starter(self._update_plot_spinner)
-
-        # Connect plot to filename and plot button; add pointer stream for cursor info
-        dmap = hv.DynamicMap(
-            pn.bind(
-                self._update_plot,
-                ms=file_selectors[0][0],
-                do_plot=init_plot[0],
-            ),
-            streams=[hv.streams.PointerXY()] # for cursor location
-        )
-
-        # Area for cursor location
-        cursor_location = pn.WidgetBox()
-
-        # Layout plot and input widgets in a row
-        self._gui_layout = pn.Row(
-            pn.Tabs( # Row [0]
-                ('Plot',        # Tabs [0]
-                    pn.Column(
-                        dmap,            # [0]
-                        cursor_location, # [1]
-                    )
-                ),
-                ('Plot Inputs', # Tabs [1]
-                    pn.Column() # [0]
-                ),
-                sizing_mode='stretch_width',
-            ),
-            pn.Spacer(width=10), # Row [1]
-            pn.Column(           # Row [2]
-                pn.Spacer(height=25), # Column [0]
-                selectors,            # Column [1]
-                init_plot,            # Column [2]
-                width_policy='min',
-                width=400,
-                sizing_mode='stretch_height',
-            ),
-            sizing_mode='stretch_height',
-        )
-
+        x_axis = self._plot_inputs['x_axis']
+        y_axis = self._plot_inputs['y_axis']
+        self._gui_layout = create_raster_gui(callbacks, data_dims, x_axis, y_axis)
         # Show gui
-        # print("gui layout:", self._gui_layout) # for debugging
         self._gui_layout.show(title=self._app_name, threaded=True)
 
     ###
