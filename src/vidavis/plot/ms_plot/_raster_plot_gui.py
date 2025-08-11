@@ -51,18 +51,9 @@ def create_raster_gui(callbacks, data_dims, x_axis, y_axis):
     # Plot button and spinner while plotting
     init_plot = plot_starter(callbacks['plot_updating'])
 
-    plot_inputs_column = pn.Column(
-        pn.Spacer(height=25), # Column [0]
-        selectors,            # Column [1]
-        init_plot,            # Column [2]
-        width_policy='min',
-        width=400,
-        sizing_mode='stretch_height',
-    )
-
-    # --------------------------------------
-    # PLOT COLUMN: PLOT WITH CURSOR POSITION
-    # --------------------------------------
+    # -------------------------
+    # PLOT WITH CURSOR POSITION
+    # -------------------------
     # Connect plot to filename and plot button; add pointer stream for cursor info
     dmap = hv.DynamicMap(
         pn.bind(
@@ -73,24 +64,28 @@ def create_raster_gui(callbacks, data_dims, x_axis, y_axis):
         streams=[hv.streams.PointerXY()] # for cursor location
     )
 
-    # Area for cursor location
-    cursor_location = pn.WidgetBox()
-
-    plot_column = pn.Column(
-        dmap,            # [0]
-        cursor_location, # [1]
-    )
-
-    # ---------------------------------------------
-    # GUI LAYOUT OF PLOT COLUMN, PLOT INPUTS COLUMN
-    # ---------------------------------------------
+    # ----------------------------------------------
+    # GUI LAYOUT OF PLOT TABS AND PLOT INPUTS COLUMN
+    # ----------------------------------------------
     return pn.Row(
         pn.Tabs(             # Row [0]
-            ('Plot', plot_column),        # Tabs [0]
+            ('Plot',
+                pn.Column(                # Tabs [0]
+                    dmap,         # [0]
+                    pn.WidgetBox, # [1] cursor location
+                )
+            ),
             ('Plot Inputs', pn.Column()), # Tabs [1]
             sizing_mode='stretch_width',
         ),
         pn.Spacer(width=10), # Row [1]
-        plot_inputs_column,  # Row [2]
+        pn.Column(  # Row [2]
+            pn.Spacer(height=25), # Column [0]
+            selectors,            # Column [1]
+            init_plot,            # Column [2]
+            width_policy='min',
+            width=400,
+            sizing_mode='stretch_height',
+        ),
         sizing_mode='stretch_height',
     )

@@ -832,20 +832,18 @@ class MsRaster(MsPlot):
         x = round(x) if x_axis == 'baseline' else x
         y = round(y) if y_axis == 'baseline' else y
         position = {x_axis: x, y_axis: y}
+        location_values, units = self._get_cursor_location_values(position)
+        cursor_location_box = self._gui_layout[0][0][1]
+        self._update_cursor_widget(cursor_location_box, location_values, units)
 
-        location_info = self._get_cursor_location(position)
-        self._update_cursor_widget(location_info)
-
-    def _get_cursor_location(self, position):
-        ''' Return coord and data var values for position dict {x_axis: x, y_axis: y} '''
-        x_axis, y_axis = position.keys()
-        values = position.copy()
+    def _get_cursor_location_values(self, cursor_position):
+        values = cursor_position.copy()
         units = {}
 
         if self._plot_data:
             try:
-                xds = set_index_coordinates(self._plot_data, (x_axis, y_axis))
-                sel_xds = xds.sel(indexers=None, method='nearest', tolerance=None, drop=False, **position)
+                xds = set_index_coordinates(self._plot_data, tuple(cursor_position.keys()))
+                sel_xds = xds.sel(indexers=None, method='nearest', tolerance=None, drop=False, **cursor_position)
                 for coord in sel_xds.coords:
                     if coord != 'uvw_label':
                         val, unit = self._get_xda_val_unit(sel_xds[coord])
@@ -867,18 +865,16 @@ class MsRaster(MsPlot):
         # Set complex component name for visibilities
         if 'VISIBILITY' in values:
             values[self._plot_inputs['vis_axis'].capitalize()] = values.pop('VISIBILITY')
-        return (values, units)
+        return values, units
 
-    def _update_cursor_widget(self, location_info):
+    def _update_cursor_widget(self, cursor_location, location_values, units):
         ''' Update cursor location widget box with info in dict '''
-        values, units = location_info
-        cursor_location = self._gui_layout[0][0][1] # pn.WidgetBox
-        cursor_location.clear()
+        cursor_location.clear() # pn.WidgetBox
         location_layout = pn.Column(pn.widgets.StaticText(name="Cursor Location"))
         info_row = pn.Row()
         info_col = pn.Column()
 
-        for name, value in values.items():
+        for name, value in location_values.items():
             # 4 entries per column; append to row and start new column
             if len(info_col.objects) == 4:
                 info_row.append(info_col)
