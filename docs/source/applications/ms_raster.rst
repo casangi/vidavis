@@ -462,8 +462,8 @@ Use ``plot()`` to create each raster plot, which can then be shown (see
 Show Raster Plot
 ````````````````
 
-After a plot is created (see :ref:`create_plot`), it may be shown in a browser
-tab with ``show()``, which has no parameters:
+After an interactive Bokeh plot is created (see :ref:`create_plot`), it may be
+shown in a browser tab with ``show()``, which has no parameters:
 
     >>> msr.show()
 
@@ -476,9 +476,24 @@ then Bokeh ``show()`` saves the plot to an HTML file in a temporary directory
 and automatically opens the file in the browser.
 
 The plot is shown with two tabs at the upper left.  The first tab, which is
-active by default, contains the plot:
+active by default, contains the plot. The white area in this plot contains no
+data, and the hover tool shows the data (x, y, and vis axis values) at the
+cursor position:
 
 .. image:: _static/show_plot.png
+
+To the right of the plot, there are several Bokeh icons. At the top, the Bokeh
+icon is a link to the Bokeh website, and below it are the pan, box zoom, wheel
+zoom, save, reset, and hover tool icons. By default, the pan, wheel zoom, and
+hover tools are activated for the plot, indicated by the line to the left of the
+icon. All Bokeh plot tools can be enabled or disabled by clicking on the tool
+icon to the right of the plot. For example, to see the flagged hover values (top
+hover icon), disable the unflagged hover tool (bottom hover icon).
+
+.. note::
+   Because the plot is rendered using Bokeh for ``show()``, the cursor location
+   information using Holoviews is not currently available with the non-GUI
+   interactive plot (see :ref:`interactive_gui`).
 
 The second tab shows the plot inputs (including automatic selections) used to
 make the raster plot, sorted alphabetically:
@@ -544,6 +559,8 @@ image editing programs such as Adobe Illustrator and/or converted to PDF.
     >>> msr.plot(iter_axis='polarization', iter_range=(0, -1))
     >>> msr.save(filename='iter_pol.png')
 
+.. _interactive_gui:
+
 Use Interactive GUI
 ```````````````````
 
@@ -557,12 +574,19 @@ required.
 
 The GUI will immediately launch in a browser tab.  If ``ms`` is set, a plot with
 default parameters is created and shown in the GUI. As with ``show()``, the plot
-is shown in a tab, with the inputs for the plot shown in the second tab:
+is shown in a tab, with the inputs for the plot shown in the second tab. By
+default, the pan, wheel zoom, and hover tools are activated. When the cursor is
+positioned over the plot, the hover values are shown in the plot and additional
+information for the cursor location is shown below the plot:
 
 .. image:: _static/msraster_gui.png
 
-Each section of the plot inputs on the right side of the GUI corresponds to the
-MsRaster plot parameters:
+.. note::
+   The Cursor Location feature is available only for single plots, not multiple
+   plots in a layout.
+
+The plot input widgets on the right side of the GUI allow the user to set all of
+the parameters in the MsRaster functions described above:
 
 * :ref:`construct_msraster` parameters:
 
@@ -587,9 +611,9 @@ MsRaster plot parameters:
   * **Iteration**: ``iter_axis``, ``iter_range``, ``subplots``
   * **Plot title**: ``title``
 
-**Plot**: the ``Plot`` button will change from outline to solid when the plot
-inputs change. Click ``Plot`` to render the plot.
+The **Plot** button below the plot inputs widgets will change from outline to
+solid when the inputs change. Click **Plot** to render the plot.
 
 .. note::
-   The only way to create multiple plots in the GUI is by iteration. Iterated
-   plots **in a layout** will be shown in a **new browser tab**.
+   Currently, the only way to create multiple plots in a layout is iteration.
+   Iterated plots in a layout will be shown in a **new browser tab**.

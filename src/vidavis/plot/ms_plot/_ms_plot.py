@@ -59,6 +59,9 @@ class MsPlot:
         self._plots_locked = False
         self._plots = []
 
+        # Initialize gui
+        self._gui_layout = None
+
         # Set data (if ms)
         self._data = None
         self._ms_info = {}
@@ -144,7 +147,7 @@ class MsPlot:
         # Single plot or combine plots into layout using subplots (rows, columns)
         layout_plot = self._layout_plots(self._plot_inputs['subplots'])
 
-        # Render plot as Bokeh Figure or GridPlot
+        # Render plot as Bokeh Figure or GridPlot so can show() in script without tying up thread
         bokeh_fig = hv.render(layout_plot)
 
         self._plots_locked = False
@@ -246,30 +249,28 @@ class MsPlot:
 
     def _set_ms(self, ms_path):
         ''' Set MsData and update ms info for input ms filepath (MSv2 or zarr), if set.
-            Return whether ms changed (false if ms is None). '''
+            Return whether ms changed (false if ms_path is None, not set yet), even if error. '''
         self._ms_info['ms'] = ms_path
         ms_error = ""
-        ms_changed = ms_path and (not self._data or not self._data.is_ms_path(ms_path))
+        if not ms_path or (self._data and self._data.is_ms_path(ms_path)):
+            return False
 
-        if ms_changed:
-            try:
-                # Set new MS data
-                self._data = MsData(ms_path, self._logger)
-                data_path = self._data.get_path()
-                self._ms_info['ms'] = data_path
-                root, ext = os.path.splitext(os.path.basename(data_path))
-                while ext != '':
-                    root, ext = os.path.splitext(root)
-                self._ms_info['basename'] = root
-                self._ms_info['data_dims'] = self._data.get_data_dimensions()
-            except RuntimeError as e:
-                ms_error = str(e)
-                self._data = None
-
+        try:
+            # Set new MS data
+            self._data = MsData(ms_path, self._logger)
+            data_path = self._data.get_path()
+            self._ms_info['ms'] = data_path
+            root, ext = os.path.splitext(os.path.basename(data_path))
+            while ext != '':
+                root, ext = os.path.splitext(root)
+            self._ms_info['basename'] = root
+            self._ms_info['data_dims'] = self._data.get_data_dimensions()
+        except RuntimeError as e:
+            ms_error = str(e)
+            self._data = None
         if ms_error:
             self._notify(ms_error, 'error', 0)
-
-        return ms_changed
+        return True
 
     def _notify(self, message, level, duration=3000):
         ''' Log message. If show_gui, notify user with toast for duration in ms.

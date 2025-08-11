@@ -7,15 +7,15 @@ import time
 from bokeh.models.formatters import NumeralTickFormatter
 import holoviews as hv
 import numpy as np
-import panel as pn
 from pandas import to_datetime
+import panel as pn
 
 from vidavis.bokeh._palette import available_palettes
+from vidavis.data.measurement_set.processing_set._ps_coords import set_index_coordinates
 from vidavis.plot.ms_plot._time_ticks import get_time_formatter
 from vidavis.plot.ms_plot._ms_plot import MsPlot
-from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS
-from vidavis.plot.ms_plot._ms_plot_selectors import (file_selector, title_selector, style_selector, axis_selector,
-aggregation_selector, iteration_selector, selection_selector, plot_starter)
+from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS, TIME_FORMAT
+from vidavis.plot.ms_plot._raster_plot_gui import create_raster_gui
 from vidavis.plot.ms_plot._raster_plot_inputs import check_inputs
 from vidavis.plot.ms_plot._raster_plot import RasterPlot
 
@@ -43,23 +43,21 @@ class MsRaster(MsPlot):
     def __init__(self, ms=None, log_level="info", log_to_file=True, show_gui=False):
         super().__init__(ms, log_level, log_to_file, show_gui, "MsRaster")
         self._raster_plot = RasterPlot()
+        self._plot_data = None
 
         # Calculations for color limits
         self._spw_stats = {}
         self._spw_color_limits = {}
 
         if show_gui:
-            # GUI based on panel widgets
-            self._gui_layout = None
-
-            # Check if plot inputs changed and new plot is needed.
-            # GUI can change subparams which do not change plot
+            # For checking if plot inputs or cursor position changed and new plot or cursor location info is needed.
             self._last_plot_inputs = None
             self._last_style_inputs = None
-            # Last plot when no new plot created (plot inputs same) or is iter Layout plot (opened in tab)
-            self._last_gui_plot = None
+            self._last_cursor = None
 
             # Return plot for gui DynamicMap:
+            # Last plot when no new plot created (plot inputs same) or is iter Layout plot (opened in tab)
+            self._last_gui_plot = None
             # Empty plot when ms not set or plot fails
             self._empty_plot = self._create_empty_plot()
 
@@ -165,25 +163,14 @@ class MsRaster(MsPlot):
             x_axis (str): Plot x-axis. Default 'baseline' ('antenna_name' for spectrum data).
             y_axis (str): Plot y-axis. Default 'time'.
             vis_axis (str): Complex visibility component to plot (amp, phase, real, imag). Default 'amp'.
-                Call data_groups() to see options.
-                MeasurementSet selection:
-                    'data_group': name for correlated data, flags, weights, and uvw. Default value 'base'.
-                        Use data_groups() to get data group names.
-                    Dimensions:
-                        Visibility dimensions: 'baseline' 'time', 'frequency', 'polarization'
-                        Spectrum dimensions: 'antenna_name', 'time', 'frequency', 'polarization'
-                        Default value is index 0 (after user selection) for non-axis dimensions unless aggregated.
-                        Use antennas() to get antenna names. Select 'baseline' as "<name1> & <name2>".
-                        Use summary() to list frequencies and polarizations.
-                        TODO: how to select time?
-            aggregator (str): reduction for rasterization. Default None.
+            aggregator (None, str): reduction for rasterization. Default None.
                 Options include 'max', 'mean', 'min', 'std', 'sum', 'var'.
-            agg_axis (str, list): which dimension to apply aggregator across. Default None.
+            agg_axis (None, str, list): which dimension to apply aggregator across. Default None.
                 Options include one or more dimensions.
                 If agg_axis is None and aggregator is set, aggregates over all non-axis dimensions.
                 If one agg_axis is selected, the non-agg dimension will be selected.
-            iter_axis (str): dimension over which to iterate values (using iter_range).
-            iter_range (tuple): (start, end) inclusive index values for iteration plots.
+            iter_axis (None, str): dimension over which to iterate values (using iter_range).
+            iter_range (None, tuple): (start, end) inclusive index values for iteration plots.
                 Default (0, 0) (first iteration only). Use (0, -1) for all iterations.
                 If subplots is a grid, the range is limited by the grid size.
                 If subplots is a single plot, all iteration plots in the range can be saved using export_range in save().
@@ -194,12 +181,12 @@ class MsRaster(MsPlot):
                 Options include None (use data limits), 'auto' (calculate limits for amplitude), and 'manual' (use range in color_range).
                 'auto' is equivalent to None if vis_axis is not 'amp'.
                 When subplots is set, the 'auto' or 'manual' range will be used for all plots.
-            color_range (tuple): (min, max) of colorbar to use if color_mode is 'manual'.
-            title (str): Plot title, default None (no title)
+            color_range (None, tuple): (min, max) of colorbar to use if color_mode is 'manual'.
+            title (None, str): Plot title, default None (no title)
                 Set title='ms' to generate title from ms name and iter_axis value, if any.
             clear_plots (bool): whether to clear list of plots. Default True.
 
-        If not show_gui and plotting is successful, use show() or save() to view/save the plot only.
+        If plot is successful, use show() or save() to view/save the plot.
         '''
         inputs = locals() # collect arguments into dict (not unused as pylint complains!)
         if self._plot_inputs['selection']:
@@ -273,6 +260,7 @@ class MsRaster(MsPlot):
 
         # Select vis_axis data to plot and update selection; returns xarray Dataset
         raster_data = self._data.get_raster_data(plot_inputs)
+        self._plot_data = raster_data
 
         # Add params needed for plot: auto color range and ms name
         self._set_auto_color_range(plot_inputs) # set calculated limits if auto mode
@@ -426,85 +414,34 @@ class MsRaster(MsPlot):
     ### -----------------------------------------------------------------------
     def _launch_gui(self):
         ''' Use Holoviz Panel to create a dashboard for plot inputs. '''
-        # Select MS
-        file_selectors = file_selector('Path to MeasurementSet (ms or zarr) for plot', '~' , self._set_filename)
-
-        # Select style - colormaps, colorbar, color limits
-        style_selectors = style_selector(self._set_style_params, self._set_color_range)
-
-        # Set title
-        title_input = title_selector(self._set_title)
-
-        # Select x, y, and vis axis
+        callbacks = {
+            'filename': self._set_filename,
+            'style': self._set_style_params,
+            'color': self._set_color_range,
+            'axes': self._set_axes,
+            'select_ps': self._set_ps_selection,
+            'select_ms': self._set_ms_selection,
+            'aggregation': self._set_aggregation,
+            'iter_values': self._set_iter_values,
+            'iteration': self._set_iteration,
+            'title': self._set_title,
+            'plot_updating': self._update_plot_spinner,
+            'update_plot': self._update_plot,
+        }
+        data_dims = self._ms_info['data_dims'] if 'data_dims' in self._ms_info else None
         x_axis = self._plot_inputs['x_axis']
         y_axis = self._plot_inputs['y_axis']
-        data_dims = self._ms_info['data_dims'] if 'data_dims' in self._ms_info else None
-        axis_selectors = axis_selector(x_axis, y_axis, data_dims, True, self._set_axes)
-
-        # Select from ProcessingSet and MeasurementSet
-        selection_selectors = selection_selector(self._set_ps_selection, self._set_ms_selection)
-
-        # Generic axis options, updated when ms is set
-        axis_options = data_dims if data_dims else []
-
-        # Select aggregator and axes to aggregate
-        agg_selectors = aggregation_selector(axis_options, self._set_aggregation)
-
-        # Select iter_axis and iter value or range
-        iter_selectors = iteration_selector(axis_options, self._set_iter_values, self._set_iteration)
-
-        # Put user input widgets in accordion with only one card active at a time
-        selectors = pn.Accordion(
-            ("Select file", file_selectors),         # [0]
-            ("Plot style", style_selectors),         # [1]
-            ("Data Selection", selection_selectors), # [2]
-            ("Plot axes", axis_selectors),           # [3]
-            ("Aggregation", agg_selectors),          # [4]
-            ("Iteration", iter_selectors),           # [5]
-            ("Plot title", title_input),             # [6]
-        )
-        selectors.toggle = True
-
-        # Plot button and spinner while plotting
-        init_plot = plot_starter(self._update_plot_spinner)
-
-        # Connect plot to filename and selector widgets
-        dmap = hv.DynamicMap(
-            pn.bind(
-                self._update_plot,
-                ms=file_selectors[0][0],
-                do_plot=init_plot[0],
-            ),
-        )
-
-        # Layout plot and input widgets in a row
-        self._gui_layout = pn.Row(
-            pn.Tabs(             # [0]
-                ('Plot', dmap),               # [0]
-                ('Plot Inputs', pn.Column()), # [1]
-                sizing_mode='stretch_width',
-            ),
-            pn.Spacer(width=10), # [1]
-            pn.Column(           # [2]
-                pn.Spacer(height=25), # [0]
-                selectors,            # [1]
-                init_plot,            # [2]
-                width_policy='min',
-                width=400,
-                sizing_mode='stretch_height',
-            ),
-            sizing_mode='stretch_height',
-        )
-
+        self._gui_layout = create_raster_gui(callbacks, data_dims, x_axis, y_axis)
         # Show gui
-        # print("gui layout:", self._gui_layout) # for debugging
         self._gui_layout.show(title=self._app_name, threaded=True)
 
     ###
     ### Main callback to create plot if inputs changed
     ###
-    def _update_plot(self, ms, do_plot):
-        ''' Create plot with inputs from GUI.  Must return plot, even if empty plot, for DynamicMap. '''
+    def _update_plot(self, ms, do_plot, x, y):
+        ''' Create plot with inputs from GUI, or update cursor (x, y) information.
+            Must return plot, even if empty plot or same plot as before, for DynamicMap.
+        '''
         if self._toast:
             self._toast.destroy()
 
@@ -513,12 +450,18 @@ class MsRaster(MsPlot):
             # Launched GUI with no MS
             return self._empty_plot
 
-        # If not first plot, user has to click Plot button (do_plot=True).
+        # If not first plot, user has to click Plot button (do_plot=True) to update plot.
+        # Respond to pointer callback only.
         first_plot = not self._last_gui_plot
         if not do_plot and not first_plot:
+            if not self._last_cursor or (self._last_cursor[0] != x or self._last_cursor[1] != y):
+                # Callback is for new cursor location
+                self._update_cursor_location(x, y)
+                self._last_cursor = (x, y)
             # Not ready to update plot yet, return last plot.
             return self._last_gui_plot
 
+        # Callback is for initial plot for input ms, or user clicked Plot button
         if (self._set_ms(ms) or first_plot) and self._data and self._data.is_valid():
             # New MS set and is valid
             self._update_gui_axis_options()
@@ -814,7 +757,6 @@ class MsRaster(MsPlot):
             #filename_input.width = len(filename[-1])
             filename_input.value = filename[-1]
 
-
     def _set_iter_values(self, iter_axis):
         ''' Set up player with values when iter_axis is selected '''
         iter_axis = None if iter_axis == 'None' else iter_axis
@@ -878,6 +820,98 @@ class MsRaster(MsPlot):
             inputs_column.clear()
             for param in self._plot_params:
                 inputs_column.append(pn.pane.Str(param))
+
+    def _update_cursor_location(self, x, y):
+        ''' Show metadata for cursor x,y position '''
+        # Convert plot values to selection values to select plot data
+        x_axis = self._plot_inputs['x_axis']
+        y_axis = self._plot_inputs['y_axis']
+        x = round(x) if x_axis == 'baseline' else x
+        y = round(y) if y_axis == 'baseline' else y
+        position = {x_axis: x, y_axis: y}
+        location_values, units = self._get_cursor_location_values(position)
+        self._update_cursor_box(location_values, units)
+
+    def _get_cursor_location_values(self, cursor_position):
+        values = cursor_position.copy()
+        units = {}
+
+        if self._plot_data:
+            try:
+                xds = set_index_coordinates(self._plot_data, tuple(cursor_position.keys()))
+                sel_xds = xds.sel(indexers=None, method='nearest', tolerance=None, drop=False, **cursor_position)
+                for coord in sel_xds.coords:
+                    if coord != 'uvw_label':
+                        val, unit = self._get_xda_val_unit(sel_xds[coord])
+                        values[coord] = val
+                        units[coord] = unit
+                for data_var in sel_xds.data_vars:
+                    val, unit = self._get_xda_val_unit(sel_xds[data_var])
+                    if data_var == 'UVW':
+                        names = ['U', 'V', 'W']
+                        for i, name in enumerate(names):
+                            values[name] = val[i]
+                            units[name] = unit[i]
+                    else:
+                        values[data_var] = val
+                        units[data_var] = unit
+            except KeyError:
+                pass
+
+        # Set complex component name for visibilities
+        if 'VISIBILITY' in values:
+            values[self._plot_inputs['vis_axis'].capitalize()] = values.pop('VISIBILITY')
+        return values, units
+
+    def _update_cursor_box(self, location_values, units):
+        ''' Update cursor location widget box with info in dict '''
+        cursor_location_box = self._gui_layout[0][0][1]
+        cursor_location_box.clear() # pn.WidgetBox
+        location_layout = pn.Column(pn.widgets.StaticText(name="Cursor Location"))
+        info_row = pn.Row()
+        info_col = pn.Column()
+
+        for name, value in location_values.items():
+            # 4 entries per column; append to row and start new column
+            if len(info_col.objects) == 4:
+                info_row.append(info_col)
+                info_col = pn.Column()
+
+            if not isinstance(value, str):
+                if name == "FLAG":
+                    value = "nan" if np.isnan(value) else int(value)
+                elif isinstance(value, float):
+                    if np.isnan(value):
+                        value = "nan"
+                    elif value < 1e6:
+                        value = f"{value:.4f}"
+                    else:
+                        value = f"{value:.4e}"
+                elif isinstance(value, np.datetime64):
+                    value = to_datetime(np.datetime_as_string(value)).strftime(TIME_FORMAT)
+                    units.pop(name) # no unit for datetime string
+            unit = units[name] if name in units else ""
+            info = pn.widgets.StaticText(name=name, value=f"{value} {unit}")
+            info.margin = (0, 10) # default (5, 10)
+            info_col.append(info)
+        info_row.append(info_col)
+        location_layout.append(info_row)
+        cursor_location_box.append(location_layout)
+
+    def _get_xda_val_unit(self, xda):
+        ''' Get value and unit as str not list '''
+        # Value
+        val = xda.values
+        if isinstance(val, np.ndarray) and val.size == 1:
+            val = val.item()
+        # Unit
+        try:
+            unit = xda.attrs['units']
+            unit = unit[0] if (isinstance(unit, list) and len(unit) == 1) else unit
+            unit = '' if unit == 'unkown' else unit
+        except KeyError:
+            unit = ''
+        return val, unit
 
     ###
     ### Callbacks for widgets which update plot inputs
