@@ -841,11 +841,14 @@ class MsRaster(MsPlot):
                 xds = set_index_coordinates(self._plot_data, tuple(cursor_position.keys()))
                 sel_xds = xds.sel(indexers=None, method='nearest', tolerance=None, drop=False, **cursor_position)
                 for coord in sel_xds.coords:
-                    if coord != 'uvw_label':
-                        val, unit = self._get_xda_val_unit(sel_xds[coord])
-                        values[coord] = val
-                        units[coord] = unit
+                    if coord == 'uvw_label' or ('baseline_antenna' in coord and 'baseline_name' in sel_xds.coords):
+                        continue
+                    val, unit = self._get_xda_val_unit(sel_xds[coord])
+                    values[coord] = val
+                    units[coord] = unit
                 for data_var in sel_xds.data_vars:
+                    if 'TIME_CENTROID' in data_var:
+                        continue
                     val, unit = self._get_xda_val_unit(sel_xds[data_var])
                     if data_var == 'UVW':
                         names = ['U', 'V', 'W']
@@ -860,7 +863,7 @@ class MsRaster(MsPlot):
 
         # Set complex component name for visibilities
         if 'VISIBILITY' in values:
-            values[self._plot_inputs['vis_axis'].capitalize()] = values.pop('VISIBILITY')
+            values[self._plot_inputs['vis_axis'].upper()] = values.pop('VISIBILITY')
         return values, units
 
     def _update_cursor_box(self, location_values, units):

@@ -29,8 +29,7 @@ class PsData:
         if not ms:
             raise RuntimeError("MS path not available for reading MeasurementSet")
 
-        # Open processing set from zarr
-        # Converts msv2 if ms path is not zarr
+        # Open processing set from zarr. Converts msv2 if ms path is not zarr
         self._ps_xdt, self._zarr_path = get_processing_set(ms, logger)
 
         self._logger = logger
@@ -120,6 +119,7 @@ class PsData:
     def get_dimension_values(self, dimension):
         ''' Return sorted list of unique values for input dimension in selected ProcessingSet.
             For 'time', returns datetime strings.
+            For spectrum datasets, 'antenna2' returns empty list.
         '''
         ps_xdt = self._get_ps_xdt()
         dim_values = []
@@ -134,11 +134,18 @@ class PsData:
             elif dimension == 'antenna2':
                 dimension = 'baseline_antenna2_name'
             for ms_xdt in ps_xdt.values():
+                if dimension not in ms_xdt.coords:
+                    if 'antenna1' in dimension and 'antenna_name' in ms_xdt.coords:
+                        dimension = 'antenna_name' # spectrum dataset
+                    else:
+                        continue
                 try:
                     dim_values.extend([value.item() for value in ms_xdt[dimension].values])
                 except TypeError:
                     dim_values.append(ms_xdt[dimension].values.item())
 
+        if not dim_values:
+            return dim_values
         return sorted(set(dim_values))
 
     def _get_time_strings(self, ps):
@@ -152,13 +159,17 @@ class PsData:
         return times
 
     def _get_baselines(self, ps):
-        ''' Return baseline strings as ant1_name & ant2_name '''
+        ''' Return baseline strings as ant1_name & ant2_name.
+            For spectrum datasets, return list of antenna_name. '''
         baselines = []
         for ms_xdt in ps.values():
-            ant1_names = ms_xdt.baseline_antenna1_name.values
-            ant2_names = ms_xdt.baseline_antenna2_name.values
-            for ant1, ant2 in zip(ant1_names, ant2_names):
-                baselines.append(f"{ant1} & {ant2}")
+            if 'antenna_name' in ms_xdt.coords:
+                baselines.extend(ms_xdt.antenna_name.values)
+            else:
+                ant1_names = ms_xdt.baseline_antenna1_name.values
+                ant2_names = ms_xdt.baseline_antenna2_name.values
+                for ant1, ant2 in zip(ant1_names, ant2_names):
+                    baselines.append(f"{ant1} & {ant2}")
         return baselines
 
     def get_dimension_attrs(self, dim):
