@@ -13,8 +13,9 @@ import panel as pn
 from vidavis.bokeh._palette import available_palettes
 from vidavis.data.measurement_set.processing_set._ps_coords import set_index_coordinates
 from vidavis.plot.ms_plot._time_ticks import get_time_formatter
+from vidavis.plot.ms_plot._locate_points import locate_point, locate_box
 from vidavis.plot.ms_plot._ms_plot import MsPlot
-from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS, TIME_FORMAT
+from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS
 from vidavis.plot.ms_plot._raster_plot_gui import create_raster_gui
 from vidavis.plot.ms_plot._raster_plot_inputs import check_inputs
 from vidavis.plot.ms_plot._raster_plot import RasterPlot
@@ -54,10 +55,9 @@ class MsRaster(MsPlot):
             self._last_plot_inputs = None
             self._last_style_inputs = None
             self._last_cursor = None
+            self._last_box = None
 
             # Return plot for gui DynamicMap:
-            # Last plot when no new plot created (plot inputs same) or is iter Layout plot (opened in tab)
-            self._last_gui_plot = None
             # Empty plot when ms not set or plot fails
             self._empty_plot = self._create_empty_plot()
 
@@ -66,9 +66,9 @@ class MsRaster(MsPlot):
             self.plot()
             self._launch_gui()
 
-            # Set filename TextInput to input ms to trigger plot
+            # Set filename TextInput to input ms, which triggers default plot
             if 'ms' in self._ms_info and self._ms_info['ms']:
-                self._set_filename([self._ms_info['ms']]) # function expects list
+                self._set_filename([self._ms_info['ms']]) # function expects list from FileBrowser widget
 
     def colormaps(self):
         ''' List available colormap (Bokeh palettes). '''
@@ -413,7 +413,7 @@ class MsRaster(MsPlot):
     ### Interactive GUI
     ### -----------------------------------------------------------------------
     def _launch_gui(self):
-        ''' Use Holoviz Panel to create a dashboard for plot inputs. '''
+        ''' Use Holoviz Panel to create and show a dashboard for plot inputs. '''
         callbacks = {
             'filename': self._set_filename,
             'style': self._set_style_params,
@@ -432,37 +432,48 @@ class MsRaster(MsPlot):
         x_axis = self._plot_inputs['x_axis']
         y_axis = self._plot_inputs['y_axis']
         self._gui_layout = create_raster_gui(callbacks, data_dims, x_axis, y_axis)
-        # Show gui
         self._gui_layout.show(title=self._app_name, threaded=True)
 
     ###
     ### Main callback to create plot if inputs changed
     ###
-    def _update_plot(self, ms, do_plot, x, y):
-        ''' Create plot with inputs from GUI, or update cursor (x, y) information.
-            Must return plot, even if empty plot or same plot as before, for DynamicMap.
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+    def _update_plot(self, ms, do_plot, x, y, bounds):
+        ''' Create plot with inputs from GUI, or update cursor/box location.
+            Callbacks:
+                ms (first plot) - return plot with default inputs
+                do_plot (Plot button clicked) - return plot with inputs from GUI
+                x, y (cursor position) - update cursor location box
+                bounds (box select) - update location of points in box in tab and log
+            This function *must* return plot, even if empty plot or last plot, for DynamicMap.
         '''
+        # Remove toast notification and collapse selection accordion
         if self._toast:
             self._toast.destroy()
-
         self._get_selector("selectors").active = []
+
         if not ms:
-            # Launched GUI with no MS
+            # GUI launched with no MS, nothing to plot
             return self._empty_plot
 
-        # If not first plot, user has to click Plot button (do_plot=True) to update plot.
-        # Respond to pointer callback only.
-        first_plot = not self._last_gui_plot
-        if not do_plot and not first_plot:
-            if not self._last_cursor or (self._last_cursor[0] != x or self._last_cursor[1] != y):
-                # Callback is for new cursor location
+        # User changed inputs without clicking Plot button, or callback for cursor/box.
+        if not do_plot and not self._first_gui_plot:
+            # Check new cursor position - update cursor location box
+            if self._cursor_changed(x, y):
                 self._update_cursor_location(x, y)
                 self._last_cursor = (x, y)
+
+            # Check new box edit position - update location for points in box
+            if self._box_changed(bounds):
+                # Callback for box edit
+                self._update_box_location(bounds)
+                self._last_box = bounds
+
             # Not ready to update plot yet, return last plot.
             return self._last_gui_plot
 
-        # Callback is for initial plot for input ms, or user clicked Plot button
-        if (self._set_ms(ms) or first_plot) and self._data and self._data.is_valid():
+        # First plot for input ms, or user clicked Plot button for new inputs
+        if (self._set_ms(ms) or self._first_gui_plot) and self._data and self._data.is_valid():
             # New MS set and is valid
             self._update_gui_axis_options()
 
@@ -495,17 +506,18 @@ class MsRaster(MsPlot):
         # Update plot inputs for gui
         self._set_plot_params(self._plot_inputs | style_inputs)
 
-        # Save inputs to see if changed
+        # Save inputs to see if changed next time
         self._last_plot_inputs = self._plot_inputs.copy()
         self._last_style_inputs = style_inputs.copy()
         self._last_plot_inputs['ps_selection'] = self._plot_inputs['ps_selection'].copy()
         self._last_plot_inputs['ms_selection'] = self._plot_inputs['ms_selection'].copy()
-        if first_plot and not do_plot:
+        if self._first_gui_plot and not do_plot:
             self._plot_inputs['ps_selection'].clear()
             self._plot_inputs['ms_selection'].clear()
 
-        # Save plot if no new plot
+        # Save plot for return value if plot update not requested
         self._last_gui_plot = gui_plot
+        self._first_gui_plot = False
 
         # Add plot inputs, change plot button to outline, and stop spinner
         self._update_plot_inputs()
@@ -513,6 +525,23 @@ class MsRaster(MsPlot):
         self._update_plot_spinner(False)
 
         return gui_plot
+# pylint: enable=too-many-arguments, too-many-positional-arguments
+
+    def _cursor_changed(self, x, y):
+        ''' Check whether cursor position changed '''
+        if not x and not y:
+            return False # not cursor callback
+        if self._last_cursor and self._last_cursor == (x, y):
+            return False # same cursor
+        return True # new cursor or cursor changed
+
+    def _box_changed(self, bounds):
+        ''' Check whether box position changed '''
+        if not bounds:
+            return False # no data, not box select callback
+        if self._last_box and self._last_box == bounds:
+            return False # same box
+        return True # new box or box changed
 
     def _inputs_changed(self, style_inputs):
         ''' Check if inputs changed and need new plot '''
@@ -578,7 +607,7 @@ class MsRaster(MsPlot):
 
                 self._logger.info("Plot update complete")
                 return plot.opts(
-                    hv.opts.QuadMesh(tools=['hover'])
+                    hv.opts.QuadMesh(tools=['hover', 'box_select'])
                 )
             except RuntimeError as e:
                 error = f"Plot failed: {str(e)}"
@@ -588,7 +617,7 @@ class MsRaster(MsPlot):
         return self._empty_plot
 
     def _create_empty_plot(self):
-        ''' Create empty Overlay plot for DynamicMap with colormap params and hover enabled '''
+        ''' Create empty Overlay plot for DynamicMap with colormap params and required tools enabled '''
         plot_params = self._raster_plot.get_plot_params()
         plot = hv.Overlay(
             hv.QuadMesh([]).opts(
@@ -603,7 +632,7 @@ class MsRaster(MsPlot):
             )
         )
         return plot.opts(
-            hv.opts.QuadMesh(tools=['hover'])
+            hv.opts.QuadMesh(tools=['hover', 'box_select'])
         )
 
     def _set_plot_colorbar(self, plot, plot_params, plot_type):
@@ -819,102 +848,69 @@ class MsRaster(MsPlot):
             inputs_column = self._gui_layout[0][1]
             inputs_column.clear()
             for param in self._plot_params:
-                inputs_column.append(pn.pane.Str(param))
+                str_pane = pn.pane.Str(param)
+                str_pane.margin = (0, 10)
+                inputs_column.append(str_pane)
 
     def _update_cursor_location(self, x, y):
-        ''' Show metadata for cursor x,y position '''
+        ''' Show data values for cursor x,y position in cursor location box below plot '''
         # Convert plot values to selection values to select plot data
         x_axis = self._plot_inputs['x_axis']
         y_axis = self._plot_inputs['y_axis']
-        x = round(x) if x_axis == 'baseline' else x
-        y = round(y) if y_axis == 'baseline' else y
-        position = {x_axis: x, y_axis: y}
-        location_values, units = self._get_cursor_location_values(position)
-        self._update_cursor_box(location_values, units)
+        plot_data = set_index_coordinates(self._plot_data, (x_axis, y_axis))
+        cursor_position = {x_axis: x, y_axis: y}
+        cursor_location = locate_point(plot_data, cursor_position, self._plot_inputs['vis_axis'])
+        self._update_cursor_box(cursor_location)
 
-    def _get_cursor_location_values(self, cursor_position):
-        values = cursor_position.copy()
-        units = {}
-
-        if self._plot_data:
-            try:
-                xds = set_index_coordinates(self._plot_data, tuple(cursor_position.keys()))
-                sel_xds = xds.sel(indexers=None, method='nearest', tolerance=None, drop=False, **cursor_position)
-                for coord in sel_xds.coords:
-                    if coord == 'uvw_label' or ('baseline_antenna' in coord and 'baseline_name' in sel_xds.coords):
-                        continue
-                    val, unit = self._get_xda_val_unit(sel_xds[coord])
-                    values[coord] = val
-                    units[coord] = unit
-                for data_var in sel_xds.data_vars:
-                    if 'TIME_CENTROID' in data_var:
-                        continue
-                    val, unit = self._get_xda_val_unit(sel_xds[data_var])
-                    if data_var == 'UVW':
-                        names = ['U', 'V', 'W']
-                        for i, name in enumerate(names):
-                            values[name] = val[i]
-                            units[name] = unit[i]
-                    else:
-                        values[data_var] = val
-                        units[data_var] = unit
-            except KeyError:
-                pass
-
-        # Set complex component name for visibilities
-        if 'VISIBILITY' in values:
-            values[self._plot_inputs['vis_axis'].upper()] = values.pop('VISIBILITY')
-        return values, units
-
-    def _update_cursor_box(self, location_values, units):
-        ''' Update cursor location widget box with info in dict '''
-        cursor_location_box = self._gui_layout[0][0][1]
+    def _update_cursor_box(self, cursor_location):
+        ''' Update cursor location widget box with list of Panel StaticText widgets '''
+        cursor_location_box = self._gui_layout[0][0][1] # row 0 tab 0 row 1 in column
         cursor_location_box.clear() # pn.WidgetBox
         location_layout = pn.Column(pn.widgets.StaticText(name="Cursor Location"))
-        info_row = pn.Row()
-        info_col = pn.Column()
-
-        for name, value in location_values.items():
-            # 4 entries per column; append to row and start new column
-            if len(info_col.objects) == 4:
-                info_row.append(info_col)
-                info_col = pn.Column()
-
-            if not isinstance(value, str):
-                if name == "FLAG":
-                    value = "nan" if np.isnan(value) else int(value)
-                elif isinstance(value, float):
-                    if np.isnan(value):
-                        value = "nan"
-                    elif value < 1e6:
-                        value = f"{value:.4f}"
-                    else:
-                        value = f"{value:.4e}"
-                elif isinstance(value, np.datetime64):
-                    value = to_datetime(np.datetime_as_string(value)).strftime(TIME_FORMAT)
-                    units.pop(name) # no unit for datetime string
-            unit = units[name] if name in units else ""
-            info = pn.widgets.StaticText(name=name, value=f"{value} {unit}")
-            info.margin = (0, 10) # default (5, 10)
-            info_col.append(info)
-        info_row.append(info_col)
-        location_layout.append(info_row)
+        location_row = self._layout_point_location(cursor_location)
+        # Add row of columns to column layout
+        location_layout.append(location_row)
+        # Add column layout to widget box
         cursor_location_box.append(location_layout)
 
-    def _get_xda_val_unit(self, xda):
-        ''' Get value and unit as str not list '''
-        # Value
-        val = xda.values
-        if isinstance(val, np.ndarray) and val.size == 1:
-            val = val.item()
-        # Unit
-        try:
-            unit = xda.attrs['units']
-            unit = unit[0] if (isinstance(unit, list) and len(unit) == 1) else unit
-            unit = '' if unit == 'unkown' else unit
-        except KeyError:
-            unit = ''
-        return val, unit
+    def _layout_point_location(self, text_list):
+        ''' Layout list of StaticText in row of columns containing 3 rows '''
+        location_row = pn.Row()
+        location_col = pn.Column()
+
+        for static_text in text_list:
+            # 3 entries per column; append to row and start new column
+            if len(location_col.objects) == 3:
+                location_row.append(location_col)
+                location_col = pn.Column()
+
+            static_text.margin = (0, 10) # default (5, 10)
+            location_col.append(static_text)
+
+        # Add last column
+        location_row.append(location_col)
+        return location_row
+
+    def _update_box_location(self, bounds):
+        ''' Show data values for points in box in box location tab and log '''
+        x_axis = self._plot_inputs['x_axis']
+        y_axis = self._plot_inputs['y_axis']
+        plot_data = set_index_coordinates(self._plot_data, (x_axis, y_axis))
+        box_bounds = {x_axis: (bounds[0], bounds[2]), y_axis: (bounds[1], bounds[3])}
+        point_locations = locate_box(plot_data, box_bounds, self._plot_inputs['vis_axis'])
+
+        locate_column = self._gui_layout[0][2] # row 0 tab 2
+        locate_column.clear()
+        self._logger.info("Locate information:")
+        for point in point_locations:
+            # Format and add to locate column
+            location_layout = self._layout_point_location(point)
+            locate_column.append(location_layout)
+            locate_column.append(pn.layout.Divider())
+
+            # Format and add to log
+            location_list = [f"{static_text.name}={static_text.value}" for static_text in point]
+            self._logger.info(", ".join(location_list))
 
     ###
     ### Callbacks for widgets which update plot inputs

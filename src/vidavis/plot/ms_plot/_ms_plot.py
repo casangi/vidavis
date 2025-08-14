@@ -60,7 +60,10 @@ class MsPlot:
         self._plots = []
 
         # Initialize gui
-        self._gui_layout = None
+        if show_gui:
+            self._gui_layout = None
+            self._first_gui_plot = True
+            self._last_gui_plot = None
 
         # Set data (if ms)
         self._data = None
