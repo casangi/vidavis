@@ -51,17 +51,21 @@ def create_raster_gui(callbacks, data_dims, x_axis, y_axis):
     # Plot button and spinner while plotting
     init_plot = plot_starter(callbacks['plot_updating'])
 
-    # -------------------------
-    # PLOT WITH CURSOR POSITION
-    # -------------------------
-    # Connect plot to filename and plot button; add pointer stream for cursor info
+    # ----------------------------------------
+    # PLOT WITH CURSOR POSITION AND BOX SELECT
+    # ----------------------------------------
+    # Connect plot to filename and plot button; add streams for cursor position and selected box
+    # 'update_plot' callback must have parameters (ms, do_plot, x, y, data)
     dmap = hv.DynamicMap(
         pn.bind(
             callbacks['update_plot'],
             ms=file_selectors[0][0],
             do_plot=init_plot[0],
         ),
-        streams=[hv.streams.PointerXY()] # for cursor location
+        streams=[
+            hv.streams.PointerXY(), # cursor location (x, y)
+            hv.streams.BoundsXY()   # box location (bounds)
+        ]
     )
 
     # ----------------------------------------------
@@ -75,7 +79,8 @@ def create_raster_gui(callbacks, data_dims, x_axis, y_axis):
                     pn.WidgetBox(), # [1] cursor location
                 )
             ),
-            ('Plot Inputs', pn.Column()), # Tabs [1]
+            ('Plot Inputs', pn.Column()),         # Tabs [1]
+            ('Locate Selected Box', pn.Column()), # Tabs [2]
             sizing_mode='stretch_width',
         ),
         pn.Spacer(width=10), # Row [1]
