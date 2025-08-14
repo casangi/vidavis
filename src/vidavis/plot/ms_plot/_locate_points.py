@@ -23,7 +23,7 @@ def locate_point(xds, position, vis_axis):
     values, units = _get_point_location(xds, position, vis_axis)
 
     # Rename baseline coordinate names to not confuse user for selection
-    baseline_names = {'baseline': 'baseline_id', 'baseline_name': 'baseline'}
+    baseline_names = {'baseline': 'baseline_index', 'baseline_name': 'baseline', 'antenna_name': 'antenna_index', 'antenna': 'antenna_name'}
     for name, value in values.items():
         name = baseline_names[name] if name in baseline_names else name
         static_text = _get_location_text(name, value, units)
