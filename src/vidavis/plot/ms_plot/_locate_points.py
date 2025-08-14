@@ -40,26 +40,32 @@ def locate_box(xds, bounds, vis_axis):
             list of list of pn.widgets.StaticText(name, value), one list per point.
     '''
     points = []
+    npoints = 0
+
     if xds:
         try:
             selection = {}
             for coord, val in bounds.items():
                 # Round index values to int for selection
-                val0 = round(val[0]) if coord in ['baseline', 'antenna_name', 'polarization'] else val[0]
-                val1 = round(val[1]) if coord in ['baseline', 'antenna_name', 'polarization'] else val[1]
-                selection[coord] = slice(val0, val1)
-
+                selection[coord] = slice(_round_index_value(coord, val[0]), _round_index_value(coord, val[1]))
             sel_xds = xds.sel(indexers=None, method=None, tolerance=None, drop=False, **selection)
+
             x_coord, y_coord = bounds.keys()
-            xs = sel_xds[x_coord].values
-            ys = sel_xds[y_coord].values
-            for y in ys:
-                for x in xs:
+            npoints = sel_xds.sizes[x_coord] * sel_xds.sizes[y_coord]
+            counter = 0
+
+            for y in sel_xds[y_coord].values:
+                for x in sel_xds[x_coord].values:
                     position = {x_coord: x, y_coord: y}
                     points.append(locate_point(sel_xds, position, vis_axis))
+                    counter += 1
+                    if counter == 100:
+                        break
+                if counter == 100:
+                    break
         except KeyError:
             pass
-    return points
+    return npoints, points
 
 def _get_point_location(xds, position, vis_axis):
     ''' Select plot data xds with point x, y position, and return coord and data_var values describing the location.
@@ -77,7 +83,7 @@ def _get_point_location(xds, position, vis_axis):
         try:
             # Round index coordinates to int for selection
             for coord, value in position.items():
-                position[coord] = round(value) if coord in ['baseline', 'antenna_name', 'polarization'] else value
+                position[coord] = _round_index_value(coord, value)
 
             sel_xds = xds.sel(indexers=None, method='nearest', tolerance=None, drop=False, **position)
             for coord in sel_xds.coords:
@@ -105,6 +111,10 @@ def _get_point_location(xds, position, vis_axis):
     if 'VISIBILITY' in values:
         values[vis_axis.upper()] = values.pop('VISIBILITY')
     return values, units
+
+def _round_index_value(coord, value):
+    ''' Round index coordinates to int for selecction '''
+    return round(value) if coord in ['baseline', 'antenna_name', 'polarization'] else value
 
 def _get_xda_val_unit(xda):
     ''' Return value and unit of xda (selected so only one value) '''

@@ -458,14 +458,13 @@ class MsRaster(MsPlot):
 
         # User changed inputs without clicking Plot button, or callback for cursor/box.
         if not do_plot and not self._first_gui_plot:
-            # Check new cursor position - update cursor location box
             if self._cursor_changed(x, y):
+                # new cursor position - update cursor location box
                 self._update_cursor_location(x, y)
                 self._last_cursor = (x, y)
 
-            # Check new box edit position - update location for points in box
             if self._box_changed(bounds):
-                # Callback for box edit
+                # new box_select position - update location for points in box
                 self._update_box_location(bounds)
                 self._last_box = bounds
 
@@ -897,11 +896,14 @@ class MsRaster(MsPlot):
         y_axis = self._plot_inputs['y_axis']
         plot_data = set_index_coordinates(self._plot_data, (x_axis, y_axis))
         box_bounds = {x_axis: (bounds[0], bounds[2]), y_axis: (bounds[1], bounds[3])}
-        point_locations = locate_box(plot_data, box_bounds, self._plot_inputs['vis_axis'])
+        npoints, point_locations = locate_box(plot_data, box_bounds, self._plot_inputs['vis_axis'])
 
         locate_column = self._gui_layout[0][2] # row 0 tab 2
         locate_column.clear()
-        self._logger.info("Locate information:")
+        message = f"Locate {npoints} points"
+        message += " (only first 100 shown):" if npoints > 100 else ":"
+        self._logger.info(message)
+
         for point in point_locations:
             # Format and add to locate column
             location_layout = self._layout_point_location(point)

@@ -594,12 +594,24 @@ plot as well as additional Cursor Location information shown below the plot:
 As with ``show()``, the plot is shown in the first tab ("Plot") in the plot
 area, with the inputs for the plot shown in the second tab ("Plot Inputs").
 In the interactive GUI only, a box may be selected with the Bokeh **box_select**
-plot tool.  The location information for all points in the selected box are
-logged in the console and the log file, as well as in the third tab ("Locate
-Selected Box").  The format is identical to the Cursor Location information
-below the plot:
+plot tool.  The location information for the **first 100** points in the
+selected box are logged in the console and the log file, as well as listed in
+the third tab ("Locate Selected Box").  The format for each point is identical
+to the Cursor Location information below the plot:
 
 .. image:: _static/box_select_locate.png
+
+.. note::
+   A new box selection will replace the old one. To clear the selection, press
+   the ESC key.
+
+.. warning::
+   Although multiple boxes may be selected by pressing the SHIFT key, the list
+   of points for each box in the Locate Selected Box tab will be cleared with
+   each new box selection. Points for all boxes will be shown in the log in the
+   order they are created.
+
+.. image:: _static/box_select_multi.png
 
 The plot input widgets on the right side of the GUI allow the user to set all of
 the parameters in the MsRaster functions described above:
