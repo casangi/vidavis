@@ -37,3 +37,5 @@ except ModuleNotFoundError:
     ### available so set it to a default value...
     ###
     __version__ = {}
+
+from .apps import MsRaster

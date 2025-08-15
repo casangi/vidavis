@@ -53,7 +53,7 @@ def concat_ps_xdt(ps_xdt, logger):
                 # (TypeError: MeasurementSetXds.__init__() got an unexpected keyword argument 'coords')
                 sorted_xds[idx] = xr.Dataset(xds.data_vars, xds.coords, xds.attrs)
                 break
-    return xr.concat(sorted_xds, dim='time')
+    return xr.concat(sorted_xds, dim='time', join='outer')
 
 def _get_sorted_times(ps):
     values = []

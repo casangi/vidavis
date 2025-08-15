@@ -55,7 +55,7 @@ Simple MsRaster Usage Example
 
 A simple example using the MsRaster application to create visibility raster plots::
 
-  >>> from vidavis.apps import MsRaster
+  >>> from vidavis import MsRaster
   >>> msr = MsRaster(ms=myms)
   >>> msr.plot() # default time vs. baseline plot
   >>> msr.show() # open plot in default browser tab

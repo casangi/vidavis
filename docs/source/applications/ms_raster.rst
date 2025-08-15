@@ -49,7 +49,7 @@ In this simple example with no GUI, we import MsRaster, construct an MsRaster
 object, create a raster plot with default parameters, and show the interactive
 Bokeh plot in a browser tab::
 
-    from vidavis.apps import MsRaster
+    from vidavis import MsRaster
     msr = MsRaster(ms=myms)
     msr.plot()
     msr.show()
