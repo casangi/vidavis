@@ -100,7 +100,7 @@ def _get_point_location(xds, position, vis_axis):
                     names = ['U', 'V', 'W']
                     for i, name in enumerate(names):
                         values[name] = val[i]
-                        units[name] = unit[i]
+                        units[name] = unit
                 else:
                     values[data_var] = val
                     units[data_var] = unit
