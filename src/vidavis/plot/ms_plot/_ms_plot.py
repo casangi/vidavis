@@ -6,7 +6,7 @@ import os
 import time
 
 from bokeh.io import export_png, export_svg
-from bokeh.plotting import save, show
+from bokeh.plotting import save
 import hvplot
 import holoviews as hv
 import numpy as np
@@ -50,6 +50,19 @@ class MsPlot:
             pn.config.notifications = True
             self._toast = None # for destroy() with new plot or new notification
 
+            # Initialize gui panel for callbacks
+            self._gui_layout = None
+            self._first_gui_plot = True
+            self._last_gui_plot = None
+            self._gui_plot_data = None
+
+            # For _update_plot callback: check which inputs and point positions changed
+            self._last_plot_inputs = None
+            self._last_style_inputs = None
+            self._last_cursor = None
+            self._last_points = None
+            self._last_box = None
+
         # Initialize plot inputs and params
         self._plot_inputs = {'selection': {}}
         self._plot_params = None
@@ -59,11 +72,9 @@ class MsPlot:
         self._plots_locked = False
         self._plots = []
 
-        # Initialize gui
-        if show_gui:
-            self._gui_layout = None
-            self._first_gui_plot = True
-            self._last_gui_plot = None
+        # Initialize show() panel for callbacks
+        self._show_layout = None
+        self._plot_data = None
 
         # Set data (if ms)
         self._data = None
@@ -159,10 +170,10 @@ class MsPlot:
             column = pn.Column()
             for param in self._plot_params:
                 column.append(pn.pane.Str(param))
-            tabs = pn.Tabs(('Plot', bokeh_fig), ('Plot Inputs', column))
-            tabs.show(title=self._app_name, threaded=True)
+            self._show_layout = pn.Tabs(('Plot', bokeh_fig), ('Plot Inputs', column))
         else:
-            show(bokeh_fig)
+            self._show_layout = pn.pane.Bokeh(bokeh_fig)
+        self._show_layout.show(title=self._app_name, threaded=True)
 
     def save(self, filename='ms_plot.png', fmt='auto', width=900, height=600):
         '''

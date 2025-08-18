@@ -5,7 +5,7 @@ Check inputs to MsRaster plot() or its GUI
 from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, AGGREGATOR_OPTIONS
 
 def check_inputs(inputs):
-    ''' Check plot input types, and axis input values. '''
+    ''' Check plot input types, and axis (plot, agg, iter) input values. '''
     _set_baseline_antenna_axis(inputs)
     _check_axis_inputs(inputs)
     _check_agg_inputs(inputs)

@@ -568,7 +568,7 @@ image editing programs such as Adobe Illustrator and/or converted to PDF.
 Use Interactive GUI
 ```````````````````
 
-As mentioned in :ref:`construct_msraster`, use ``showgui=True`` to launch the
+As mentioned in :ref:`construct_msraster`, use ``show_gui=True`` to launch the
 interactive GUI.  In this case, an ``ms`` path can be supplied but is not
 required.
 
@@ -577,10 +577,16 @@ required.
     >>> msr = MsRaster(ms=None, log_level='info', show_gui=True)
 
 The GUI will immediately launch in a browser tab.  If ``ms`` is set, a plot with
-default parameters is created and shown in the GUI. By default, the pan, wheel
-zoom, and hover tools are activated:
+default parameters is created and shown in the GUI. As with ``show()``, the plot
+is shown in the first tab ("Plot") in the plot area, with the inputs for the
+plot shown in the second tab ("Plot Inputs"). By default, the pan, wheel zoom,
+and hover tools are activated:
 
 .. image:: _static/msraster_gui.png
+
+**Locate Points:**
+
+Location information for selected points is available only in the MsRaster GUI.
 
 When the cursor is positioned over the plot, the hover values are shown in the
 plot as well as additional Cursor Location information shown below the plot:
@@ -591,27 +597,42 @@ plot as well as additional Cursor Location information shown below the plot:
    The Cursor Location feature is available only for single plots, not multiple
    plots in a layout.
 
-As with ``show()``, the plot is shown in the first tab ("Plot") in the plot
-area, with the inputs for the plot shown in the second tab ("Plot Inputs").
-In the interactive GUI only, a box may be selected with the Bokeh **box_select**
-plot tool.  The location information for the **first 100** points in the
-selected box are logged in the console and the log file, as well as listed in
-the third tab ("Locate Selected Box").  The format for each point is identical
-to the Cursor Location information below the plot:
+Points may also be selected with the Bokeh **box_select** or **point_draw** plot
+tools. The location information for each selected point is described in the
+Python console, in the log file, and in a GUI tab. The location information and
+format for each point is identical to the Cursor Location described above.
+Points selected individually with **point_draw** will appear in the third tab
+("Locate Selected Points"), and points selected in a box with **box_select**
+will appear in the fourth tab ("Locate Selected Box"). Only the **first 100**
+points in the selected box are located, starting with the first row. In the
+following plot, two points and one box are selected at the bottom center of the
+plot, and the **point_draw** tool is activated:
 
-.. image:: _static/box_select_locate.png
+.. image:: _static/locate_points.png
 
-.. note::
-   A new box selection will replace the old one. To clear the selection, press
-   the ESC key.
+**Select Points:**
+
+Any number of points may be selected, moved, or changed by activating the
+**point_draw** tool. To select a point, tap anywhere on the plot. To move a
+point, tap and drag the point to the desired position. To delete a point, click
+the point to select it then press BACKSPACE or DELETE.
+
+**Select Box:**
+
+A box may be selected or deleted by activating the **box_select** tool. To
+select a box, tap and drag across the plot to draw a rectangle. A new box
+selection will replace the old box. To clear the box selection, press the ESC
+key.
+
+.. image:: _static/locate_selected_box.png
 
 .. warning::
    Although multiple boxes may be selected by pressing the SHIFT key, the list
    of points for each box in the Locate Selected Box tab will be cleared with
-   each new box selection. Points for all boxes will be shown in the log in the
-   order they are created.
+   each new box selection rather than appended. However, the point locations
+   will be shown in the console and log, in the order the boxes are created.
 
-.. image:: _static/box_select_multi.png
+**Plot Inputs:**
 
 The plot input widgets on the right side of the GUI allow the user to set all of
 the parameters in the MsRaster functions described above:
