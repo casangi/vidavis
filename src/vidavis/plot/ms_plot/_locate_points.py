@@ -10,6 +10,32 @@ import panel as pn
 
 from vidavis.plot.ms_plot._ms_plot_constants import TIME_FORMAT
 
+def cursor_changed(x, y, last_cursor):
+    ''' Check whether cursor position changed '''
+    if not x and not y:
+        return False # not cursor callback
+    if last_cursor and last_cursor == (x, y):
+        return False # same cursor
+    return True # new cursor or cursor changed
+
+def points_changed(data, last_points):
+    ''' Check whether point positions changed '''
+    # No data = {'x': [], 'y': []}
+    if len(data['x']) == 0 and len(data['y']) == 0:
+        return False # not points callback
+    if last_points and last_points == data:
+        return False # same points
+    return True # new points, points changed, or points deleted
+
+def box_changed(bounds, last_box):
+    ''' Check whether box position changed '''
+    # No bounds = None
+    if not bounds:
+        return False # no data, not box select callback
+    if last_box and last_box == bounds:
+        return False # same box
+    return True # new box, box changed, or box deleted
+
 def locate_point(xds, position, vis_axis):
     '''
         Get cursor location as values of coordinates and data vars.
@@ -47,7 +73,7 @@ def locate_box(xds, bounds, vis_axis):
             selection = {}
             for coord, val in bounds.items():
                 # Round index values to int for selection
-                selection[coord] = slice(_round_index_value(coord, val[0]), _round_index_value(coord, val[1]))
+                selection[coord] = slice(_get_selection_value(coord, val[0]), _get_selection_value(coord, val[1]))
             sel_xds = xds.sel(indexers=None, method=None, tolerance=None, drop=False, **selection)
 
             x_coord, y_coord = bounds.keys()
@@ -81,9 +107,9 @@ def _get_point_location(xds, position, vis_axis):
 
     if xds:
         try:
-            # Round index coordinates to int for selection
             for coord, value in position.items():
-                position[coord] = _round_index_value(coord, value)
+                # Round index coordinates to int and convert time to datetime if float for selection
+                position[coord] = _get_selection_value(coord, value)
 
             sel_xds = xds.sel(indexers=None, method='nearest', tolerance=None, drop=False, **position)
             for coord in sel_xds.coords:
@@ -112,9 +138,15 @@ def _get_point_location(xds, position, vis_axis):
         values[vis_axis.upper()] = values.pop('VISIBILITY')
     return values, units
 
-def _round_index_value(coord, value):
-    ''' Round index coordinates to int for selecction '''
-    return round(value) if coord in ['baseline', 'antenna_name', 'polarization'] else value
+def _get_selection_value(coord, value):
+    ''' Convert index coordinates to int and float time coordinate to datetime '''
+    if coord in ['baseline', 'antenna_name', 'polarization']:
+        # Round index coordinates to int for selecction
+        value = round(value)
+    elif coord == 'time' and isinstance(value, float):
+        # Bokeh datetime values are floating-point numbers: milliseconds since the Unix epoch
+        value = to_datetime(value, unit='ms', origin='unix')
+    return value
 
 def _get_xda_val_unit(xda):
     ''' Return value and unit of xda (selected so only one value) '''

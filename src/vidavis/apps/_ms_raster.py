@@ -12,13 +12,14 @@ import panel as pn
 
 from vidavis.bokeh._palette import available_palettes
 from vidavis.data.measurement_set.processing_set._ps_coords import set_index_coordinates
-from vidavis.plot.ms_plot._time_ticks import get_time_formatter
-from vidavis.plot.ms_plot._locate_points import locate_point, locate_box
+from vidavis.plot.ms_plot._check_raster_inputs import check_inputs
+from vidavis.plot.ms_plot._locate_points import cursor_changed, points_changed, box_changed, locate_point, locate_box
 from vidavis.plot.ms_plot._ms_plot import MsPlot
 from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS
+from vidavis.plot.ms_plot._plot_inputs import inputs_changed
 from vidavis.plot.ms_plot._raster_plot_gui import create_raster_gui
-from vidavis.plot.ms_plot._raster_plot_inputs import check_inputs
 from vidavis.plot.ms_plot._raster_plot import RasterPlot
+from vidavis.plot.ms_plot._time_ticks import get_time_formatter
 
 class MsRaster(MsPlot):
     '''
@@ -44,21 +45,13 @@ class MsRaster(MsPlot):
     def __init__(self, ms=None, log_level="info", log_to_file=True, show_gui=False):
         super().__init__(ms, log_level, log_to_file, show_gui, "MsRaster")
         self._raster_plot = RasterPlot()
-        self._plot_data = None
 
         # Calculations for color limits
         self._spw_stats = {}
         self._spw_color_limits = {}
 
         if show_gui:
-            # For checking if plot inputs or cursor position changed and new plot or cursor location info is needed.
-            self._last_plot_inputs = None
-            self._last_style_inputs = None
-            self._last_cursor = None
-            self._last_box = None
-
-            # Return plot for gui DynamicMap:
-            # Empty plot when ms not set or plot fails
+            # Return plot for gui DynamicMap: empty plot when ms not set or plot fails
             self._empty_plot = self._create_empty_plot()
 
             # Set default style and plot inputs to use when launching gui
@@ -66,7 +59,7 @@ class MsRaster(MsPlot):
             self.plot()
             self._launch_gui()
 
-            # Set filename TextInput to input ms, which triggers default plot
+            # Set filename TextInput widget to input ms, which triggers default plot
             if 'ms' in self._ms_info and self._ms_info['ms']:
                 self._set_filename([self._ms_info['ms']]) # function expects list from FileBrowser widget
 
@@ -97,10 +90,8 @@ class MsRaster(MsPlot):
             string_exact_match (bool): whether to require exact matches for string and string list columns (default True) or partial matches (False).
             query (str): a Pandas query string to apply additional filtering.
             **kwargs (dict): keyword arguments representing summary column names and values.
-        See summary(data_group) and data_groups() for selection options. Use keyword 'data_group_name' for data group selection.
-        Summary column names include 'name', 'intents', 'shape', 'polarization', 'scan_name', 'spw_name',
-          'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'.
-        The selection is applied to the data within the MeasurementSets where applicable (polarization, scan_name, field_name)
+        See data_groups() and summary(data_group) and for selection keyword options. Use keyword 'data_group_name' for data group selection.
+        The selection is also applied to the data within the MeasurementSets where keyword is a coordinate (polarization, scan_name, field_name) and
           string_exact_match=True, else the entire MS is selected.
         Selections are cumulative until clear_selection() is called.
         Raises exception with message if selection fails.
@@ -156,8 +147,8 @@ class MsRaster(MsPlot):
              iter_axis=None, iter_range=None, subplots=None, color_mode=None, color_range=None, title=None, clear_plots=True):
         '''
         Create a raster plot of vis_axis data.
-        Plot axes include data dimensions (time, baseline/antenna, frequency, polarization).
-        The first spectral window (by id) and dimensions not set as plot axes (first value) will be automatically selected if no user selection has been made, unless aggregated.
+        Plot axes include data dimensions (time, baseline/antenna_name, frequency, polarization).
+        The first spectral window by time and dimensions not set as plot axes will be automatically selected by first value if no user selection has been made, unless aggregated.
 
         Args:
             x_axis (str): Plot x-axis. Default 'baseline' ('antenna_name' for spectrum data).
@@ -253,14 +244,20 @@ class MsRaster(MsPlot):
         for key, val in plot_inputs.items():
             self._plot_inputs[key] = val
 
-    def _do_plot(self, plot_inputs):
+    def _do_plot(self, plot_inputs, is_gui_plot=False):
         ''' Create plot using plot inputs '''
         if not self._plot_init:
             self._init_plot(plot_inputs)
 
         # Select vis_axis data to plot and update selection; returns xarray Dataset
         raster_data = self._data.get_raster_data(plot_inputs)
-        self._plot_data = raster_data
+
+        # Save plot data for plot location callbacks unless layout (location not supported)
+        if not self._is_layout():
+            if is_gui_plot:
+                self._gui_plot_data = set_index_coordinates(raster_data, (self._plot_inputs['x_axis'], self._plot_inputs['y_axis']))
+            else:
+                self._plot_data = set_index_coordinates(raster_data, (self._plot_inputs['x_axis'], self._plot_inputs['y_axis']))
 
         # Add params needed for plot: auto color range and ms name
         self._set_auto_color_range(plot_inputs) # set calculated limits if auto mode
@@ -301,10 +298,11 @@ class MsRaster(MsPlot):
         num_subplots = np.prod(subplots) if subplots else 1
         num_iter_plots = min(num_iter_plots, num_subplots) if num_subplots > 1 else num_iter_plots
         end_idx = start_idx + num_iter_plots
+        self._plot_inputs['iter_range'] = (start_idx, end_idx)
 
-        # Set each iter value in ms_selection
-        if 'ms_selection' not in plot_inputs:
-            plot_inputs['ms_selection'] = {}
+        # Set each iter value in selection
+        if 'selection' not in plot_inputs:
+            plot_inputs['selection'] = {}
 
         for i in range(start_idx, end_idx):
             # Select iteration value and make plot
@@ -346,6 +344,22 @@ class MsRaster(MsPlot):
         self._logger.info("Plotting %s msv4 datasets.", self._data.get_num_ms())
         self._logger.info("Maximum dimensions for selected spw: %s", self._data.get_max_data_dims())
         self._plot_init = True
+
+    def _is_layout(self):
+        ''' Determine if plot is a layout using plot inputs '''
+        # Check if subplots is a layout
+        if self._plot_inputs['subplots'] is None or self._plot_inputs['subplots'] == (1, 1):
+            return False
+
+        # Check if iteration set and iter_range more than one plot
+        iter_length = 0
+        if self._plot_inputs['iter_axis'] is not None:
+            iter_range = self._plot_inputs['iter_range']
+            iter_range = (0, 0) if iter_range is None else iter_range
+            iter_length = len(range(iter_range[0], iter_range[1] + 1))
+
+        # Also check if previous plot(s) not cleared
+        return iter_length > 1 or len(self._plots) > 0
 
     def _set_auto_color_range(self, plot_inputs):
         ''' Calculate stats for color limits for non-gui amplitude plots. '''
@@ -438,13 +452,14 @@ class MsRaster(MsPlot):
     ### Main callback to create plot if inputs changed
     ###
 # pylint: disable=too-many-arguments, too-many-positional-arguments
-    def _update_plot(self, ms, do_plot, x, y, bounds):
+    def _update_plot(self, ms, do_plot, x, y, data, bounds):
         ''' Create plot with inputs from GUI, or update cursor/box location.
             Callbacks:
                 ms (first plot) - return plot with default inputs
                 do_plot (Plot button clicked) - return plot with inputs from GUI
-                x, y (cursor position) - update cursor location box
-                bounds (box select) - update location of points in box in tab and log
+                x, y (PointerXY) - update cursor location box
+                data (PointDraw from point_draw tool) - update location of drawn points in tab and log
+                bounds (Bounds from box_select tool) - update location of points in box in tab and log
             This function *must* return plot, even if empty plot or last plot, for DynamicMap.
         '''
         # Remove toast notification and collapse selection accordion
@@ -458,13 +473,18 @@ class MsRaster(MsPlot):
 
         # User changed inputs without clicking Plot button, or callback for cursor/box.
         if not do_plot and not self._first_gui_plot:
-            if self._cursor_changed(x, y):
+            if cursor_changed(x, y, self._last_cursor):
                 # new cursor position - update cursor location box
                 self._update_cursor_location(x, y)
                 self._last_cursor = (x, y)
 
-            if self._box_changed(bounds):
-                # new box_select position - update location for points in box
+            if points_changed(data, self._last_points):
+                # new points position - update selected points location tab
+                self._update_points_location(data)
+                self._last_points = data
+
+            if box_changed(bounds, self._last_box):
+                # new box_select position - update selected box location tab
                 self._update_box_location(bounds)
                 self._last_box = bounds
 
@@ -484,9 +504,9 @@ class MsRaster(MsPlot):
         self.clear_selection()
         gui_plot = None
 
+        # Make plot if first plot or changed plot
         style_inputs = self._raster_plot.get_plot_params()['style']
-        if self._inputs_changed(style_inputs):
-            # First plot or changed plot
+        if inputs_changed(self._plot_inputs, self._last_plot_inputs) or inputs_changed(style_inputs, self._last_style_inputs):
             try:
                 # Check inputs from GUI then plot
                 self._plot_inputs['data_dims'] = self._ms_info['data_dims']
@@ -510,59 +530,24 @@ class MsRaster(MsPlot):
         self._last_style_inputs = style_inputs.copy()
         self._last_plot_inputs['ps_selection'] = self._plot_inputs['ps_selection'].copy()
         self._last_plot_inputs['ms_selection'] = self._plot_inputs['ms_selection'].copy()
+
+        # Save plot for return value if plot update not requested
+        self._last_gui_plot = gui_plot
+
+        # Remove selection not from user
         if self._first_gui_plot and not do_plot:
             self._plot_inputs['ps_selection'].clear()
             self._plot_inputs['ms_selection'].clear()
 
-        # Save plot for return value if plot update not requested
-        self._last_gui_plot = gui_plot
         self._first_gui_plot = False
 
-        # Add plot inputs, change plot button to outline, and stop spinner
-        self._update_plot_inputs()
+        # Add plot inputs to GUI, change plot button to outline, and stop spinner
+        self._show_plot_inputs()
         self._update_plot_status(False)
         self._update_plot_spinner(False)
 
         return gui_plot
 # pylint: enable=too-many-arguments, too-many-positional-arguments
-
-    def _cursor_changed(self, x, y):
-        ''' Check whether cursor position changed '''
-        if not x and not y:
-            return False # not cursor callback
-        if self._last_cursor and self._last_cursor == (x, y):
-            return False # same cursor
-        return True # new cursor or cursor changed
-
-    def _box_changed(self, bounds):
-        ''' Check whether box position changed '''
-        if not bounds:
-            return False # no data, not box select callback
-        if self._last_box and self._last_box == bounds:
-            return False # same box
-        return True # new box or box changed
-
-    def _inputs_changed(self, style_inputs):
-        ''' Check if inputs changed and need new plot '''
-        if not self._last_plot_inputs:
-            return True
-
-        for key, val in self._plot_inputs.items():
-            if not self._values_equal(val, self._last_plot_inputs[key]):
-                return True
-
-        for key, val in style_inputs.items():
-            if not self._values_equal(val, self._last_style_inputs[key]):
-                return True
-        return False
-
-    def _values_equal(self, val1, val2):
-        ''' Test if values are set and equal, or not set (cannot compare value with None) '''
-        if val1 is not None and val2 is not None: # both set
-            return val1 == val2
-        if val1 is None and val2 is None: # both None
-            return True
-        return False # one set and other is None
 
     def _do_gui_selection(self):
         ''' Apply selections selected in GUI '''
@@ -594,7 +579,7 @@ class MsRaster(MsPlot):
                     return layout_plot
 
                 # Make single Overlay raster plot for DynamicMap
-                plot = self._do_plot(self._plot_inputs)
+                plot = self._do_plot(self._plot_inputs, True)
                 plot_params = self._raster_plot.get_plot_params()
 
                 # Update color limits in gui with data range
@@ -606,7 +591,11 @@ class MsRaster(MsPlot):
 
                 self._logger.info("Plot update complete")
                 return plot.opts(
-                    hv.opts.QuadMesh(tools=['hover', 'box_select'])
+                    hv.opts.QuadMesh(
+                        tools=['hover', 'box_select'],
+                        selection_fill_alpha=0.5, # dim selected areas of plot
+                        nonselection_fill_alpha=1.0, # do not dim unselected areas of plot
+                    )
                 )
             except RuntimeError as e:
                 error = f"Plot failed: {str(e)}"
@@ -631,7 +620,11 @@ class MsRaster(MsPlot):
             )
         )
         return plot.opts(
-            hv.opts.QuadMesh(tools=['hover', 'box_select'])
+            hv.opts.QuadMesh(
+                tools=['hover', 'box_select'],
+                selection_fill_alpha=0.5, # dim selected areas of plot
+                nonselection_fill_alpha=1.0, # do not dim unselected areas of plot
+            )
         )
 
     def _set_plot_colorbar(self, plot, plot_params, plot_type):
@@ -834,15 +827,15 @@ class MsRaster(MsPlot):
             spinner = self._gui_layout[2][2][1]
             spinner.value = plot_clicked
 
-    def _update_plot_status(self, inputs_changed):
-        ''' Change button color when inputs change. '''
+    def _update_plot_status(self, plot_changed):
+        ''' Change button color when plot inputs change. '''
         if self._gui_layout:
             # Set button color
             button = self._gui_layout[2][2][0]
-            button.button_style = 'solid' if inputs_changed else 'outline'
+            button.button_style = 'solid' if plot_changed else 'outline'
 
-    def _update_plot_inputs(self):
-        ''' Show inputs for raster plot in GUI '''
+    def _show_plot_inputs(self):
+        ''' Show inputs for raster plot in GUI tab '''
         if self._plot_params:
             inputs_column = self._gui_layout[0][1]
             inputs_column.clear()
@@ -856,14 +849,10 @@ class MsRaster(MsPlot):
         # Convert plot values to selection values to select plot data
         x_axis = self._plot_inputs['x_axis']
         y_axis = self._plot_inputs['y_axis']
-        plot_data = set_index_coordinates(self._plot_data, (x_axis, y_axis))
         cursor_position = {x_axis: x, y_axis: y}
-        cursor_location = locate_point(plot_data, cursor_position, self._plot_inputs['vis_axis'])
-        self._update_cursor_box(cursor_location)
+        cursor_location = locate_point(self._gui_plot_data, cursor_position, self._plot_inputs['vis_axis'])
 
-    def _update_cursor_box(self, cursor_location):
-        ''' Update cursor location widget box with list of Panel StaticText widgets '''
-        cursor_location_box = self._gui_layout[0][0][1] # row 0 tab 0 row 1 in column
+        cursor_location_box = self._gui_layout[0][0][1] # row[0] tabs[0] column[1]
         cursor_location_box.clear() # pn.WidgetBox
         location_layout = pn.Column(pn.widgets.StaticText(name="Cursor Location"))
         location_row = self._layout_point_location(cursor_location)
@@ -890,29 +879,54 @@ class MsRaster(MsPlot):
         location_row.append(location_col)
         return location_row
 
+    def _update_points_location(self, data):
+        ''' Show data values for points in point_draw in tab and log '''
+        points_locate_column = self._gui_layout[0][2] # row[0] tabs[2]
+        points_locate_column.clear()
+        points = list(zip(data['x'], data['y']))
+
+        if points:
+            self._logger.info("Locate selected points:")
+            x_axis = self._plot_inputs['x_axis']
+            y_axis = self._plot_inputs['y_axis']
+
+            for point in list(zip(data['x'], data['y'])):
+                # Locate point
+                point_position = {x_axis: point[0], y_axis: point[1]}
+                point_location = locate_point(self._gui_plot_data, point_position, self._plot_inputs['vis_axis'])
+                # Format location and add to points locate column
+                location_layout = self._layout_point_location(point_location)
+                points_locate_column.append(location_layout)
+                points_locate_column.append(pn.layout.Divider())
+
+                # Format and add to log
+                location_list = [f"{static_text.name}={static_text.value}" for static_text in point_location]
+                self._logger.info(", ".join(location_list))
+
     def _update_box_location(self, bounds):
-        ''' Show data values for points in box in box location tab and log '''
-        x_axis = self._plot_inputs['x_axis']
-        y_axis = self._plot_inputs['y_axis']
-        plot_data = set_index_coordinates(self._plot_data, (x_axis, y_axis))
-        box_bounds = {x_axis: (bounds[0], bounds[2]), y_axis: (bounds[1], bounds[3])}
-        npoints, point_locations = locate_box(plot_data, box_bounds, self._plot_inputs['vis_axis'])
+        ''' Show data values for points in box_select in tab and log '''
+        box_locate_column = self._gui_layout[0][3] # row[0] tabs[3]
+        box_locate_column.clear()
+        if bounds:
+            x_axis = self._plot_inputs['x_axis']
+            y_axis = self._plot_inputs['y_axis']
+            box_bounds = {x_axis: (bounds[0], bounds[2]), y_axis: (bounds[1], bounds[3])}
+            npoints, point_locations = locate_box(self._gui_plot_data, box_bounds, self._plot_inputs['vis_axis'])
 
-        locate_column = self._gui_layout[0][2] # row 0 tab 2
-        locate_column.clear()
-        message = f"Locate {npoints} points"
-        message += " (only first 100 shown):" if npoints > 100 else ":"
-        self._logger.info(message)
+            message = f"Locate {npoints} points"
+            message += " (only first 100 shown):" if npoints > 100 else ":"
+            self._logger.info(message)
+            box_locate_column.append(pn.pane.Str(message))
 
-        for point in point_locations:
-            # Format and add to locate column
-            location_layout = self._layout_point_location(point)
-            locate_column.append(location_layout)
-            locate_column.append(pn.layout.Divider())
+            for point in point_locations:
+                # Format and add to box locate column
+                location_layout = self._layout_point_location(point)
+                box_locate_column.append(location_layout)
+                box_locate_column.append(pn.layout.Divider())
 
-            # Format and add to log
-            location_list = [f"{static_text.name}={static_text.value}" for static_text in point]
-            self._logger.info(", ".join(location_list))
+                # Format and add to log
+                location_list = [f"{static_text.name}={static_text.value}" for static_text in point]
+                self._logger.info(", ".join(location_list))
 
     ###
     ### Callbacks for widgets which update plot inputs
@@ -968,9 +982,7 @@ class MsRaster(MsPlot):
         else:
             self._plot_inputs['iter_range'] = None
         self._update_plot_status(True) # Change plot button to solid
-# pylint: enable=too-many-arguments, too-many-positional-arguments
 
-# pylint: disable=too-many-arguments, too-many-positional-arguments, unused-argument
     def _set_ps_selection(self, query, name, intents, scan_name, spw_name, field_name, source_name, line_name):
         ''' Select ProcessingSet from gui using summary columns '''
         inputs = locals()
