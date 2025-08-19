@@ -51,10 +51,11 @@ class MsPlot:
             self._toast = None # for destroy() with new plot or new notification
 
             # Initialize gui panel for callbacks
+            self._gui_plot_data = None
+            self._gui_selection = {}
             self._gui_layout = None
             self._first_gui_plot = True
             self._last_gui_plot = None
-            self._gui_plot_data = None
 
             # For _update_plot callback: check which inputs and point positions changed
             self._last_plot_inputs = None
@@ -64,8 +65,8 @@ class MsPlot:
             self._last_box = None
 
         # Initialize plot inputs and params
-        self._plot_inputs = {'selection': {}}
-        self._plot_params = None
+        self._plot_inputs = None # object to manage plot inputs
+        self._plot_params = None # for plot inputs tab
 
         # Initialize plots
         self._plot_init = False
@@ -146,7 +147,7 @@ class MsPlot:
         if self._data:
             self._data.clear_selection()
 
-        self._plot_inputs['selection'] = {}
+        self._plot_inputs.remove_input('selection')
 
     def show(self):
         ''' 
@@ -159,7 +160,8 @@ class MsPlot:
         self._plots_locked = True
 
         # Single plot or combine plots into layout using subplots (rows, columns)
-        layout_plot = self._layout_plots(self._plot_inputs['subplots'])
+        subplots = self._plot_inputs.get_input('subplots')
+        layout_plot = self._layout_plots(subplots)
 
         # Render plot as Bokeh Figure or GridPlot so can show() in script without tying up thread
         bokeh_fig = hv.render(layout_plot)
@@ -193,11 +195,14 @@ class MsPlot:
 
         # Combine plots into layout using subplots (rows, columns) if not single plot.
         # Set fixed size for export.
-        layout_plot = self._layout_plots(self._plot_inputs['subplots'], (width, height))
+        subplots = self._plot_inputs.get_input('subplots')
+        layout_plot = self._layout_plots(subplots, (width, height))
 
-        if not isinstance(layout_plot, hv.Layout) and self._plot_inputs['iter_axis']:
+        iter_axis = self._plot_inputs.get_input('iter_axis')
+        if not isinstance(layout_plot, hv.Layout) and iter_axis:
             # Save iterated plots individually, with index appended to filename
-            plot_idx = 0 if self._plot_inputs['iter_range'] is None else self._plot_inputs['iter_range'][0]
+            iter_range = self._plot_inputs.get_input('iter_range')
+            plot_idx = 0 if iter_range is None else iter_range[0]
             for plot in self._plots:
                 exportname = f"{name}_{plot_idx}{ext}"
                 self._save_plot(plot, exportname, fmt)
