@@ -8,11 +8,9 @@ from bokeh.models.formatters import NumeralTickFormatter
 import holoviews as hv
 import numpy as np
 from pandas import to_datetime
-import panel as pn
 
 from vidavis.bokeh._palette import available_palettes
 from vidavis.data.measurement_set.processing_set._ps_coords import set_index_coordinates
-from vidavis.plot.ms_plot._locate_points import cursor_changed, points_changed, box_changed, locate_point, locate_box
 from vidavis.plot.ms_plot._ms_plot import MsPlot
 from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS
 from vidavis.plot.ms_plot._plot_inputs import inputs_changed
@@ -101,10 +99,10 @@ class MsRaster(MsPlot):
         For explanation and examples, see:
         https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
         '''
-        if self._data and self._data.is_valid():
+        if self._ms_data and self._ms_data.is_valid():
             try:
                 self._plot_inputs.set_selection(kwargs)
-                self._data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
+                self._ms_data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
             except KeyError as ke:
                 error = "ProcessingSet selection yielded empty ProcessingSet."
                 if not self._show_gui:
@@ -128,10 +126,10 @@ class MsRaster(MsPlot):
         For explanation of parameters and examples, see:
         https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel
         '''
-        if self._data and self._data.is_valid():
+        if self._ms_data and self._ms_data.is_valid():
             try:
                 self._plot_inputs.set_selection(indexers_kwargs)
-                self._data.select_ms(indexers=indexers, method=method, tolerance=tolerance, drop=drop, **indexers_kwargs)
+                self._ms_data.select_ms(indexers=indexers, method=method, tolerance=tolerance, drop=drop, **indexers_kwargs)
             except KeyError as ke:
                 error = str(ke).strip("\'")
                 if not self._show_gui:
@@ -177,7 +175,7 @@ class MsRaster(MsPlot):
 
         If plot is successful, use show() or save() to view/save the plot.
         '''
-        inputs = locals() # collect arguments into dict (not unused as pylint complains!)
+        inputs = locals() # collect arguments into dict
 
         start = time.time()
 
@@ -194,9 +192,12 @@ class MsRaster(MsPlot):
         if selection:
             self._logger.info("Create raster plot with selection: %s", selection)
 
+        # If previous plot was shown, unlink from data streams
+        super().unlink_plot_streams()
+
         if not self._show_gui:
             # Cannot plot if no MS
-            if not self._data or not self._data.is_valid():
+            if not self._ms_data or not self._ms_data.is_valid():
                 raise RuntimeError("Cannot plot MS: input MS path is invalid or missing.")
 
             # Create raster plot and add to plot list
@@ -243,7 +244,7 @@ class MsRaster(MsPlot):
             self._init_plot()
 
         # Select vis_axis data to plot and update selection; returns xarray Dataset
-        raster_data = self._data.get_raster_data(self._plot_inputs.get_inputs())
+        raster_data = self._ms_data.get_raster_data(self._plot_inputs.get_inputs())
 
         # Save plot data for plot location callbacks unless layout (location not supported)
         if not self._plot_inputs.is_layout():
@@ -262,7 +263,8 @@ class MsRaster(MsPlot):
 
         # Show plot inputs in log
         super()._set_plot_params(plot_inputs | self._raster_plot.get_plot_params()['style'])
-        self._logger.info("MsRaster plot parameters: %s", ", ".join(self._plot_params))
+        plot_params = [f"{key}={value}" for key, value in self._plot_params.items()]
+        self._logger.info("MsRaster plot parameters: %s", ", ".join(plot_params))
 
         # Make plot. Add data min/max if GUI is shown to update color limits range.
         return self._raster_plot.raster_plot(raster_data, self._logger, self._show_gui)
@@ -278,23 +280,29 @@ class MsRaster(MsPlot):
 
         # Init plot before getting iter values
         self._init_plot()
-        iter_values = self._data.get_dimension_values(iter_axis)
+        iter_values = self._ms_data.get_dimension_values(iter_axis)
         n_iter = len(iter_values)
 
         iter_range = (0, 0) if iter_range is None else iter_range
         start_idx, end_idx = iter_range
+        auto_range = end_idx == -1
 
         if start_idx >= n_iter:
             raise IndexError(f"iter_range start {start_idx} is greater than number of iterations {n_iter}")
         end_idx = n_iter if (end_idx == -1 or end_idx >= n_iter) else end_idx + 1
         num_iter_plots = end_idx - start_idx
 
-        # Plot the minimum of iter range or subplots number of plots
+        # Plot the minimum of iter range or subplots number of plots.
+        # If subplots is single plot, plot all for save()
         num_subplots = np.prod(subplots) if subplots else 1
         num_iter_plots = min(num_iter_plots, num_subplots) if num_subplots > 1 else num_iter_plots
         end_idx = start_idx + num_iter_plots
 
-        self._plot_inputs.set_input('auto_iter_range', (start_idx, end_idx - 1))
+        if auto_range:
+            # For listing plot inputs
+            start_idx = start_idx.item() if isinstance(start_idx, np.int64) else start_idx
+            end_idx = end_idx.item() if isinstance(end_idx, np.int64) else end_idx
+            self._plot_inputs.set_input('auto_iter_range', (start_idx, end_idx - 1))
 
         for i in range(start_idx, end_idx):
             # Select iteration value and make plot
@@ -323,24 +331,24 @@ class MsRaster(MsPlot):
         data_group = self._plot_inputs.get_input('data_group')
         spw_selection = self._plot_inputs.get_selection('spw_name')
         if not spw_selection:
-            first_spw = self._data.get_first_spw(data_group)
+            first_spw = self._ms_data.get_first_spw(data_group)
             auto_selection['spw_name'] = first_spw
             self._plot_inputs.set_input('auto_spw', first_spw) # keep separate from user selection
 
         if auto_selection:
             # Do selection and save to plot inputs
             self._logger.info("Automatic selection of data group and/or spw: %s", auto_selection)
-            self._data.select_ps(query=None, string_exact_match=True, **auto_selection)
+            self._ms_data.select_ps(query=None, string_exact_match=True, **auto_selection)
 
         # Print data info for spw selection
-        self._logger.info("Plotting %s msv4 datasets.", self._data.get_num_ms())
-        self._logger.info("Maximum dimensions for selected spw: %s", self._data.get_max_data_dims())
+        self._logger.info("Plotting %s msv4 datasets.", self._ms_data.get_num_ms())
+        self._logger.info("Maximum dimensions for selected spw: %s", self._ms_data.get_max_data_dims())
         self._plot_init = True
 
     def _set_auto_color_range(self):
         ''' Calculate stats for color limits for non-gui amplitude plots. '''
         color_mode = self._plot_inputs.get_input('color_mode')
-        color_limits = None
+        auto_color_limits = None
 
         if color_mode == 'auto':
             if self._plot_inputs.get_input('vis_axis') == 'amp' and not self._plot_inputs.get_input('aggregator'):
@@ -348,18 +356,26 @@ class MsRaster(MsPlot):
                 spw_name = self._plot_inputs.get_selection('spw_name')
                 if not spw_name:
                     spw_name = self._plot_inputs.get_input('auto_spw')
+
                 if spw_name in self._spw_color_limits:
-                    color_limits = self._spw_color_limits[spw_name]
+                    auto_color_limits = self._spw_color_limits[spw_name]
                 else:
                     # Select spw name and data group only, no dimensions
                     data_group = self._plot_inputs.get_input('data_group')
                     spw_data_selection = {'spw_name': spw_name, 'data_group_name': data_group}
-                    color_limits = self._calc_amp_color_limits(spw_data_selection)
-                    self._spw_color_limits[spw_name] = color_limits
-        self._plot_inputs.set_input('auto_color_range', color_limits)
+                    auto_color_limits = self._calc_amp_color_limits(spw_data_selection)
 
-        if color_limits:
-            self._logger.info("Setting amplitude color range: (%.4f, %.4f).", color_limits[0], color_limits[1])
+                    if auto_color_limits:
+                        # Convert to float for listing plot inputs
+                        start, end = auto_color_limits
+                        start = start.item() if isinstance(start, np.float64) else start
+                        end = end.item() if isinstance(end, np.float64) else end
+                        auto_color_limits = (start, end)
+                    self._spw_color_limits[spw_name] = auto_color_limits
+        self._plot_inputs.set_input('auto_color_range', auto_color_limits)
+
+        if auto_color_limits:
+            self._logger.info("Setting amplitude color range: (%.4f, %.4f).", auto_color_limits[0], auto_color_limits[1])
         elif color_mode is None:
             self._logger.info("Autoscale color range")
         else:
@@ -370,7 +386,7 @@ class MsRaster(MsPlot):
         self._logger.info("Calculating stats for colorbar limits.")
         start = time.time()
 
-        ms_stats = self._data.get_vis_stats(selection, 'amp')
+        ms_stats = self._ms_data.get_vis_stats(selection, 'amp')
         self._spw_stats['spw_name'] = ms_stats
         if not ms_stats:
             return None # autoscale
@@ -395,7 +411,7 @@ class MsRaster(MsPlot):
         if clear_plots:
             super().clear_plots()
 
-        # Clear params set for last plot
+        # Clear params for last plot
         self._raster_plot.reset_plot_params()
 
         # Unitialize plot to redo auto selections if needed
@@ -451,29 +467,15 @@ class MsRaster(MsPlot):
 
         # User changed inputs without clicking Plot button, or callback for cursor/box.
         if not do_plot and not self._first_gui_plot:
-            x_axis = self._plot_inputs.get_input('x_axis')
-            y_axis = self._plot_inputs.get_input('y_axis')
-            vis_axis = self._plot_inputs.get_input('vis_axis')
-            if cursor_changed(x, y, self._last_cursor):
-                # new cursor position - update cursor location box
-                self._update_cursor_location(x, y, x_axis, y_axis, vis_axis)
-                self._last_cursor = (x, y)
-
-            if points_changed(data, self._last_points):
-                # new points position - update selected points location tab
-                self._update_points_location(data, x_axis, y_axis, vis_axis)
-                self._last_points = data
-
-            if box_changed(bounds, self._last_box):
-                # new box_select position - update selected box location tab
-                self._update_box_location(bounds, x_axis, y_axis, vis_axis)
-                self._last_box = bounds
-
+            # Locate callbacks
+            super()._locate_cursor(x, y, self._gui_plot_data, self._gui_layout[0])
+            super()._locate_points(data, self._gui_plot_data, self._gui_layout[0])
+            super()._locate_box(bounds, self._gui_plot_data, self._gui_layout[0])
             # Not ready to update plot yet, return last plot.
-            return self._last_gui_plot
+            return self._last_plot
 
         # First plot for input ms, or user clicked Plot button for new inputs
-        if (self._set_ms(ms) or self._first_gui_plot) and self._data and self._data.is_valid():
+        if (self._set_ms(ms) or self._first_gui_plot) and self._ms_data and self._ms_data.is_valid():
             # New MS set and is valid
             self._update_gui_axis_options()
 
@@ -503,7 +505,7 @@ class MsRaster(MsPlot):
                 gui_plot = self._empty_plot
         else:
             # Subparam values changed but not applied to plot
-            gui_plot = self._last_gui_plot
+            gui_plot = self._last_plot
 
         # Update plot inputs for gui
         self._set_plot_params(plot_inputs | style_inputs)
@@ -513,7 +515,7 @@ class MsRaster(MsPlot):
         self._last_style_inputs = style_inputs.copy()
 
         # Save plot for return value if plot update not requested
-        self._last_gui_plot = gui_plot
+        self._last_plot = gui_plot
         self._first_gui_plot = False
 
         # Add plot inputs to GUI, change plot button to outline, and stop spinner
@@ -536,7 +538,7 @@ class MsRaster(MsPlot):
     ###
     def _do_gui_plot(self):
         ''' Create plot based on gui plot inputs '''
-        if self._data and self._data.is_valid():
+        if self._ms_data and self._ms_data.is_valid():
             try:
                 if self._plot_inputs.get_input('iter_axis'):
                     # Make iter plot (possibly with subplots layout)
@@ -547,7 +549,7 @@ class MsRaster(MsPlot):
                         # Cannot show Layout in DynamicMap, show in new tab
                         super().show()
                         self._logger.info("Plot update complete")
-                        return self._last_gui_plot
+                        return self._last_plot
                     # Overlay raster plot for DynamicMap
                     self._logger.info("Plot update complete")
                     return layout_plot
@@ -567,7 +569,7 @@ class MsRaster(MsPlot):
                 return plot.opts(
                     hv.opts.QuadMesh(
                         tools=['hover', 'box_select'],
-                        selection_fill_alpha=0.5, # dim selected areas of plot
+                        selection_fill_alpha=0.2, # dim selected areas of plot
                         nonselection_fill_alpha=1.0, # do not dim unselected areas of plot
                     )
                 )
@@ -679,7 +681,7 @@ class MsRaster(MsPlot):
             # Update options for vis_axis selector
             vis_axis_selector = axis_selectors.objects[2]
             vis_axis_value = vis_axis_selector.value
-            if self._data.get_correlated_data('base') == 'SPECTRUM':
+            if self._ms_data.get_correlated_data('base') == 'SPECTRUM':
                 vis_axis_selector.options = SPECTRUM_AXIS_OPTIONS
             else:
                 vis_axis_selector.options = VIS_AXIS_OPTIONS
@@ -705,8 +707,8 @@ class MsRaster(MsPlot):
 
     def _update_ps_selection_options(self, ps_selectors):
         ''' Set ProcessingSet gui options from ms summary '''
-        if self._data and self._data.is_valid():
-            summary = self._data.get_summary()
+        if self._ms_data and self._ms_data.is_valid():
+            summary = self._ms_data.get_summary()
             if summary is None:
                 return
 
@@ -723,7 +725,7 @@ class MsRaster(MsPlot):
 
     def _update_ms_selection_options(self, ms_selectors):
         ''' Set MeasurementSet gui options from ms data '''
-        if self._data and self._data.is_valid():
+        if self._ms_data and self._ms_data.is_valid():
             for selector in ms_selectors:
                 selection_key = MS_SELECTION_OPTIONS[selector.name] if selector.name in MS_SELECTION_OPTIONS else None
                 if selection_key:
@@ -756,7 +758,7 @@ class MsRaster(MsPlot):
         ''' Set up player with values when iter_axis is selected '''
         iter_axis = None if iter_axis == 'None' else iter_axis
         if iter_axis and self._gui_layout:
-            iter_values = self._data.get_dimension_values(iter_axis)
+            iter_values = self._ms_data.get_dimension_values(iter_axis)
             if iter_values:
 
                 iter_selectors = self._get_selector('iter')
@@ -786,7 +788,7 @@ class MsRaster(MsPlot):
 
     def _get_datetime_values(self, float_times):
         ''' Return list of float time values as list of datetime values for gui options '''
-        time_attrs = self._data.get_dimension_attrs('time')
+        time_attrs = self._ms_data.get_dimension_attrs('time')
         datetime_values = []
         try:
             datetime_values = to_datetime(float_times, unit=time_attrs['units'], origin=time_attrs['format'])
@@ -809,94 +811,9 @@ class MsRaster(MsPlot):
             button.button_style = 'solid' if plot_changed else 'outline'
 
     def _show_plot_inputs(self):
-        ''' Show inputs for raster plot in GUI tab '''
-        if self._plot_params:
-            inputs_column = self._gui_layout[0][1]
-            inputs_column.clear()
-            for param in self._plot_params:
-                str_pane = pn.pane.Str(param)
-                str_pane.margin = (0, 10)
-                inputs_column.append(str_pane)
-
-# pylint: disable=too-many-arguments, too-many-positional-arguments
-    def _update_cursor_location(self, x, y, x_axis, y_axis, vis_axis):
-        ''' Show data values for cursor x,y position in cursor location box below plot '''
-        # Convert plot values to selection values to select plot data
-        cursor_position = {x_axis: x, y_axis: y}
-        cursor_location = locate_point(self._gui_plot_data, cursor_position, vis_axis)
-
-        cursor_location_box = self._gui_layout[0][0][1] # row[0] tabs[0] column[1]
-        cursor_location_box.clear() # pn.WidgetBox
-        location_layout = pn.Column(pn.widgets.StaticText(name="Cursor Location"))
-        location_row = self._layout_point_location(cursor_location)
-        # Add row of columns to column layout
-        location_layout.append(location_row)
-        # Add column layout to widget box
-        cursor_location_box.append(location_layout)
-# pylint: enable=too-many-arguments, too-many-positional-arguments
-
-    def _layout_point_location(self, text_list):
-        ''' Layout list of StaticText in row of columns containing 3 rows '''
-        location_row = pn.Row()
-        location_col = pn.Column()
-
-        for static_text in text_list:
-            # 3 entries per column; append to row and start new column
-            if len(location_col.objects) == 3:
-                location_row.append(location_col)
-                location_col = pn.Column()
-
-            static_text.margin = (0, 10) # default (5, 10)
-            location_col.append(static_text)
-
-        # Add last column
-        location_row.append(location_col)
-        return location_row
-
-    def _update_points_location(self, data, x_axis, y_axis, vis_axis):
-        ''' Show data values for points in point_draw in tab and log '''
-        points_locate_column = self._gui_layout[0][2] # row[0] tabs[2]
-        points_locate_column.clear()
-        points = list(zip(data['x'], data['y']))
-
-        if points:
-            self._logger.info("Locate selected points:")
-
-            for point in list(zip(data['x'], data['y'])):
-                # Locate point
-                point_position = {x_axis: point[0], y_axis: point[1]}
-                point_location = locate_point(self._gui_plot_data, point_position, vis_axis)
-                # Format location and add to points locate column
-                location_layout = self._layout_point_location(point_location)
-                points_locate_column.append(location_layout)
-                points_locate_column.append(pn.layout.Divider())
-
-                # Format and add to log
-                location_list = [f"{static_text.name}={static_text.value}" for static_text in point_location]
-                self._logger.info(", ".join(location_list))
-
-    def _update_box_location(self, bounds, x_axis, y_axis, vis_axis):
-        ''' Show data values for points in box_select in tab and log '''
-        box_locate_column = self._gui_layout[0][3] # row[0] tabs[3]
-        box_locate_column.clear()
-        if bounds:
-            box_bounds = {x_axis: (bounds[0], bounds[2]), y_axis: (bounds[1], bounds[3])}
-            npoints, point_locations = locate_box(self._gui_plot_data, box_bounds, vis_axis)
-
-            message = f"Locate {npoints} points"
-            message += " (only first 100 shown):" if npoints > 100 else ":"
-            self._logger.info(message)
-            box_locate_column.append(pn.pane.Str(message))
-
-            for point in point_locations:
-                # Format and add to box locate column
-                location_layout = self._layout_point_location(point)
-                box_locate_column.append(location_layout)
-                box_locate_column.append(pn.layout.Divider())
-
-                # Format and add to log
-                location_list = [f"{static_text.name}={static_text.value}" for static_text in point]
-                self._logger.info(", ".join(location_list))
+        ''' Show inputs for raster plot in column in GUI tab '''
+        inputs_column = self._gui_layout[0][1]
+        super()._fill_inputs_column(inputs_column)
 
     ###
     ### Callbacks for widgets which update plot inputs
@@ -934,8 +851,8 @@ class MsRaster(MsPlot):
             # Set iter_range
             if iter_value_type == 'By Value':
                 # Use index of iter_value for tuple
-                if self._data and self._data.is_valid():
-                    iter_values = self._data.get_dimension_values(iter_axis)
+                if self._ms_data and self._ms_data.is_valid():
+                    iter_values = self._ms_data.get_dimension_values(iter_axis)
                     iter_index = iter_values.index(iter_value)
                     iter_range = (iter_index, iter_index)
             else:

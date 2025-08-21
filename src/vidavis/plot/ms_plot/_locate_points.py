@@ -10,8 +10,9 @@ import panel as pn
 
 from vidavis.plot.ms_plot._ms_plot_constants import TIME_FORMAT
 
-def cursor_changed(x, y, last_cursor):
+def cursor_changed(cursor, last_cursor):
     ''' Check whether cursor position changed '''
+    x, y = cursor
     if not x and not y:
         return False # not cursor callback
     if last_cursor and last_cursor == (x, y):
@@ -21,7 +22,7 @@ def cursor_changed(x, y, last_cursor):
 def points_changed(data, last_points):
     ''' Check whether point positions changed '''
     # No data = {'x': [], 'y': []}
-    if len(data['x']) == 0 and len(data['y']) == 0:
+    if not data or (len(data['x']) == 0 and len(data['y']) == 0):
         return False # not points callback
     if last_points and last_points == data:
         return False # same points
@@ -36,7 +37,67 @@ def box_changed(bounds, last_box):
         return False # same box
     return True # new box, box changed, or box deleted
 
-def locate_point(xds, position, vis_axis):
+def update_cursor_location(cursor, plot_axes, xds, cursor_locate_box):
+    ''' Show data values for cursor x,y position in cursor location box (pn.WidgetBox) '''
+    # Convert plot values to selection values to select plot data
+    cursor_locate_box.clear()
+
+    x, y = cursor
+    x_axis, y_axis, vis_axis = plot_axes
+    cursor_position = {x_axis: x, y_axis: y}
+    cursor_location = _locate_point(xds, cursor_position, vis_axis)
+
+    location_column = pn.Column(pn.widgets.StaticText(name="Cursor Location"))
+    # Add row of columns to column layout
+    location_row = _layout_point_location(cursor_location)
+    location_column.append(location_row)
+    # Add location column to widget box
+    cursor_locate_box.append(location_column)
+
+def update_points_location(data, plot_axes, xds, points_tab_column, logger):
+    ''' Show data values for points in point_draw in tab and log '''
+    points_tab_column.clear()
+    if data:
+        x_axis, y_axis, vis_axis = plot_axes
+        logger.info("Locate selected points:")
+
+        for point in list(zip(data['x'], data['y'])):
+            # Locate point
+            point_position = {x_axis: point[0], y_axis: point[1]}
+            point_location = _locate_point(xds, point_position, vis_axis)
+            # Format location and add to points locate column
+            location_layout = _layout_point_location(point_location)
+            points_tab_column.append(location_layout)
+            points_tab_column.append(pn.layout.Divider())
+
+            # Format and add to log
+            location_list = [f"{static_text.name}={static_text.value}" for static_text in point_location]
+            logger.info(", ".join(location_list))
+
+def update_box_location(bounds, plot_axes, xds, box_tab_column, logger):
+    ''' Show data values for points in box_select in tab and log '''
+    box_tab_column.clear()
+    if bounds:
+        x_axis, y_axis, vis_axis = plot_axes
+        box_bounds = {x_axis: (bounds[0], bounds[2]), y_axis: (bounds[1], bounds[3])}
+        npoints, point_locations = _locate_box(xds, box_bounds, vis_axis)
+
+        message = f"Locate {npoints} points"
+        message += " (only first 100 shown):" if npoints > 100 else ":"
+        logger.info(message)
+        box_tab_column.append(pn.pane.Str(message))
+
+        for point in point_locations:
+            # Format and add to box locate column
+            location_layout = _layout_point_location(point)
+            box_tab_column.append(location_layout)
+            box_tab_column.append(pn.layout.Divider())
+
+            # Format and add to log
+            location_list = [f"{static_text.name}={static_text.value}" for static_text in point]
+            logger.info(", ".join(location_list))
+
+def _locate_point(xds, position, vis_axis):
     '''
         Get cursor location as values of coordinates and data vars.
             xds (Xarray Dataset): data for plot
@@ -48,15 +109,18 @@ def locate_point(xds, position, vis_axis):
     static_text_list = []
     values, units = _get_point_location(xds, position, vis_axis)
 
-    # Rename baseline coordinate names to not confuse user for selection
-    baseline_names = {'baseline': 'baseline_index', 'baseline_name': 'baseline', 'antenna_name': 'antenna_index', 'antenna': 'antenna_name'}
+    # List indexed coordinate int value with with str value
+    index_coords = {'baseline': 'baseline_name', 'antenna_name': 'antenna', 'polarization': 'polarization_name'}
     for name, value in values.items():
-        name = baseline_names[name] if name in baseline_names else name
+        if name in index_coords.values():
+            continue
+        if name in index_coords and isinstance(value, int):
+            value = f"{values[index_coords[name]]} ({value})" # append name to index
         static_text = _get_location_text(name, value, units)
         static_text_list.append(static_text)
     return static_text_list
 
-def locate_box(xds, bounds, vis_axis):
+def _locate_box(xds, bounds, vis_axis):
     '''
         Get location of each point in box bounds as values of coordinate and data vars.
             xds (Xarray Dataset): data for plot
@@ -83,7 +147,7 @@ def locate_box(xds, bounds, vis_axis):
             for y in sel_xds[y_coord].values:
                 for x in sel_xds[x_coord].values:
                     position = {x_coord: x, y_coord: y}
-                    points.append(locate_point(sel_xds, position, vis_axis))
+                    points.append(_locate_point(sel_xds, position, vis_axis))
                     counter += 1
                     if counter == 100:
                         break
@@ -183,3 +247,21 @@ def _get_location_text(name, value, units):
             units.pop(name) # no unit for datetime string
     unit = units[name] if name in units else ""
     return pn.widgets.StaticText(name=name, value=f"{value} {unit}")
+
+def _layout_point_location(text_list):
+    ''' Layout list of StaticText in row of columns containing 3 rows '''
+    location_row = pn.Row()
+    location_col = pn.Column()
+
+    for static_text in text_list:
+        # 3 entries per column; append to row and start new column
+        if len(location_col.objects) == 3:
+            location_row.append(location_col)
+            location_col = pn.Column()
+
+        static_text.margin = (0, 10) # default (5, 10)
+        location_col.append(static_text)
+
+    # Add last column
+    location_row.append(location_col)
+    return location_row
