@@ -467,42 +467,109 @@ shown in a browser tab with ``show()``, which has no parameters:
 
     >>> msr.show()
 
-To show the plot, :xref:`holoviews` renders the plot to a :xref:`bokeh` figure,
-then Bokeh ``show()`` saves the figure to an HTML file in a temporary directory
-and automatically opens the file in the browser. The white areas in this plot
-contain no data, and the hover tool shows the data (x, y, and vis axis values)
-at the cursor position:
+To show the plot, :xref:`holoviews` renders the plot and saves it to an HTML
+file in a temporary directory, then automatically opens the file in the browser.
+The white areas in this plot contain no data, and the hover tool shows the plot
+data at the cursor position (x, y, and vis axis values):
 
-.. image:: _static/show_plot.png
+.. image:: _static/msraster_cursor.png
 
-The plot is shown with two tabs at the upper left.  The first tab ("Plot"),
-which is active by default, contains the plot. To the right of the plot, there
-are several Bokeh icons for plot tools. At the top of the toolbar, the Bokeh
-icon is a link to the Bokeh website, and below it are the pan, box zoom, wheel
-zoom, save, reset, and hover tool icons. By default, the pan, wheel zoom, and
+To the right of the plot, the toolbar contains the Bokeh icons for plot tools.
+At the top of the toolbar, the Bokeh icon is a link to the Bokeh website, and
+below it are the *pan*, *box zoom*, *box select*, *wheel zoom*, *point draw*,
+*save*, *reset*, and *hover* tool icons. By default, the pan, wheel zoom, and
 hover tools are activated for the plot, indicated by the line to the left of the
-icon. Bokeh plot tools can be enabled or disabled by clicking on the tool icon.
+icons. Bokeh plot tools can be enabled or disabled by clicking on the tool icon.
 For example, to see the flagged hover values (top hover icon), disable the
 unflagged hover tool (bottom hover icon).
 
+In addition to the hover information, when the cursor moves over the plot, a
+Cursor Location box appears under the plot to show the coordinates and data
+variables associated with the cursor position.
 
-The second tab ("Plot Inputs") shows the parameters used to make the raster
+The plot is shown with four tabs at the upper left.  The first tab ("Plot"),
+which is active by default, contains the plot and the cursor location box. The
+second tab ("Plot Inputs") shows the parameters used to make the raster
 plot (including automatic selections), sorted alphabetically:
 
 .. image:: _static/show_plot_inputs.png
    :width: 75%
 
+The remaining tabs are for selecting areas of the plot to show the location of
+the points. See :ref:`locate_data` for a detailed description.
+
+.. note::
+
+   The Locate features are disabled in a plot when a new plot is created with
+   ``plot()``, since the plot data needed for the metadata is no longer
+   available. The cursor box and tabs are removed, but the hover tool is still
+   active.
+
 If multiple plots were created (with ``iter_axis`` or ``clear_plots=False``) in
 a ``subplots`` layout, the plots are connected so that the Bokeh plot tools such
-as pan and zoom act on all plots in the layout:
+as pan and zoom act on all plots in the layout.  The following layout plot
+demonstrates the same zoom level, with the shared toolbar at the upper right:
 
 .. image:: _static/msraster_layout_zoom.png
 
 .. note::
-   Because the plot is rendered using Bokeh instead of Holoviews for ``show()``,
-   the Cursor Location information and Selected Box Location information is not
-   currently available with the non-GUI interactive plot (see
-   :ref:`interactive_gui` for these features).
+
+   The Locate features are not available when multiple plots are shown in a
+   layout.
+
+.. _locate_data:
+
+Locate Plot Data
+````````````````
+
+Location information for selected points can be obtained for the **cursor**
+position, for points selected using the **Point Draw** tool, or for points in a
+box selected with the **Box Select** tool.
+
+**Cursor:**
+
+When the cursor is positioned over the plot, the hover values are shown in the
+plot as well as additional Cursor Location information shown below the plot:
+
+.. image:: _static/msraster_cursor.png
+
+**Select Points:**
+
+Any number of points may be selected, moved, or changed by activating the
+**Point Draw** tool. To select a point, tap anywhere on the plot. To move a
+point, tap and drag the point to the desired position. To delete a point, tap
+the point to select it then press BACKSPACE or DELETE.
+
+**Select Box:**
+
+A box may be selected or deleted by activating the **Box Select** tool. To
+select a box, tap and drag across the plot to draw a rectangle. A new box
+selection will replace the old box. To clear the box selection, press the ESC
+key.
+
+The location information for each selected point is displayed in the Python
+console, in the log file, and in a GUI tab. Points selected individually with
+**Point Draw** will appear in the third tab (**Locate Selected Points**), and
+points selected in a box with **Box Select** will appear in the fourth tab
+(**Locate Selected Box**). In the following plot, two points and one box are
+selected at the bottom center of the plot, and the **Point Draw** tool is
+activated:
+
+.. image:: _static/locate_points.png
+
+The location information and format for each point is identical to the Cursor
+Location described above. For example, in the **Locate Selected Box** tab, the
+number of points in the box is shown, then the points are listed with a divider
+between them. Only the **first 100** points in the selected box are located,
+starting with the first row:
+
+.. image:: _static/locate_selected_box.png
+
+.. warning::
+   Although multiple boxes may be selected by pressing the SHIFT key, the list
+   of points for each box in the Locate Selected Box tab will be cleared with
+   each new box selection rather than appended. However, the points in each box
+   can be accessed in the console and log, in the order the boxes are created.
 
 .. _save_plot:
 
@@ -578,59 +645,13 @@ required.
 
 The GUI will immediately launch in a browser tab.  If ``ms`` is set, a plot with
 default parameters is created and shown in the GUI. As with ``show()``, the plot
-is shown in the first tab ("Plot") in the plot area, with the inputs for the
-plot shown in the second tab ("Plot Inputs"). By default, the pan, wheel zoom,
-and hover tools are activated:
+is shown in the first tab (**Plot**), the inputs for the plot are shown in the
+second tab (**Plot Inputs**), and location information for points selected with
+plot tools are shown in the remaining two tabs **Locate Selected Points** and
+**Locate Selected Box** (see :ref:`locate_data`). By default, the pan, wheel
+zoom, and hover tools are activated:
 
 .. image:: _static/msraster_gui.png
-
-**Locate Points:**
-
-Location information for selected points is available only in the MsRaster GUI.
-
-When the cursor is positioned over the plot, the hover values are shown in the
-plot as well as additional Cursor Location information shown below the plot:
-
-.. image:: _static/msraster_cursor.png
-
-.. note::
-   The Cursor Location feature is available only for single plots, not multiple
-   plots in a layout.
-
-Points may also be selected with the Bokeh **box_select** or **point_draw** plot
-tools. The location information for each selected point is described in the
-Python console, in the log file, and in a GUI tab. The location information and
-format for each point is identical to the Cursor Location described above.
-Points selected individually with **point_draw** will appear in the third tab
-("Locate Selected Points"), and points selected in a box with **box_select**
-will appear in the fourth tab ("Locate Selected Box"). Only the **first 100**
-points in the selected box are located, starting with the first row. In the
-following plot, two points and one box are selected at the bottom center of the
-plot, and the **point_draw** tool is activated:
-
-.. image:: _static/locate_points.png
-
-**Select Points:**
-
-Any number of points may be selected, moved, or changed by activating the
-**point_draw** tool. To select a point, tap anywhere on the plot. To move a
-point, tap and drag the point to the desired position. To delete a point, click
-the point to select it then press BACKSPACE or DELETE.
-
-**Select Box:**
-
-A box may be selected or deleted by activating the **box_select** tool. To
-select a box, tap and drag across the plot to draw a rectangle. A new box
-selection will replace the old box. To clear the box selection, press the ESC
-key.
-
-.. image:: _static/locate_selected_box.png
-
-.. warning::
-   Although multiple boxes may be selected by pressing the SHIFT key, the list
-   of points for each box in the Locate Selected Box tab will be cleared with
-   each new box selection rather than appended. However, the point locations
-   will be shown in the console and log, in the order the boxes are created.
 
 **Plot Inputs:**
 

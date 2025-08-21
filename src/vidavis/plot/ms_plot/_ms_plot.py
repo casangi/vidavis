@@ -20,6 +20,7 @@ except ImportError:
     _HAVE_TOOLVIPER = False
 
 from vidavis.data.measurement_set._ms_data import MsData
+from vidavis.plot.ms_plot._locate_points import cursor_changed, points_changed, box_changed, update_cursor_location, update_points_location, update_box_location
 from vidavis.toolbox import AppContext, get_logger
 
 class MsPlot:
@@ -45,6 +46,15 @@ class MsPlot:
         # Set up temp dir for output html files
         self._app_context = AppContext(app_name)
 
+        # Initialize plot inputs and params
+        self._plot_inputs = None # object to manage plot inputs
+
+        # Initialize plots
+        self._plot_init = False
+        self._plots = []
+        self._last_plot = None
+        self._plot_params = [] # for plot inputs tab
+
         if show_gui:
             # Enable "toast" notifications
             pn.config.notifications = True
@@ -55,30 +65,23 @@ class MsPlot:
             self._gui_selection = {}
             self._gui_layout = None
             self._first_gui_plot = True
-            self._last_gui_plot = None
 
-            # For _update_plot callback: check which inputs and point positions changed
+            # For _update_plot callback: check if inputs changed
             self._last_plot_inputs = None
             self._last_style_inputs = None
-            self._last_cursor = None
-            self._last_points = None
-            self._last_box = None
 
-        # Initialize plot inputs and params
-        self._plot_inputs = None # object to manage plot inputs
-        self._plot_params = None # for plot inputs tab
+        # For locate callback: check if points changed
+        self._plot_axes = None
+        self._last_cursor = None
+        self._last_points = None
+        self._last_box = None
 
-        # Initialize plots
-        self._plot_init = False
-        self._plots_locked = False
-        self._plots = []
-
-        # Initialize show() panel for callbacks
+        # Initialize non-gui show() panel for callbacks
         self._show_layout = None
         self._plot_data = None
 
         # Set data (if ms)
-        self._data = None
+        self._ms_data = None
         self._ms_info = {}
         self._set_ms(ms)
 # pylint: enable=too-many-arguments, too-many-positional-arguments
@@ -95,15 +98,15 @@ class MsPlot:
                                  'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
             Returns: list of unique values when single column is requested, else None
         '''
-        if self._data:
-            self._data.summary(data_group, columns)
+        if self._ms_data:
+            self._ms_data.summary(data_group, columns)
         else:
             self._logger.error("Error: MS path has not been set")
 
     def data_groups(self):
         ''' Returns set of data groups from all ProcessingSet ms_xds. '''
-        if self._data:
-            return self._data.data_groups()
+        if self._ms_data:
+            return self._ms_data.data_groups()
         self._logger.error("Error: MS path has not been set")
         return None
 
@@ -112,8 +115,8 @@ class MsPlot:
             Dimension options include 'time', 'baseline' (for visibility data), 'antenna' (for spectrum data), 'antenna1',
                 'antenna2', 'frequency', 'polarization'.
         '''
-        if self._data:
-            return self._data.get_dimension_values(dimension)
+        if self._ms_data:
+            return self._ms_data.get_dimension_values(dimension)
         self._logger.error("Error: MS path has not been set")
         return None
 
@@ -121,8 +124,8 @@ class MsPlot:
         ''' Plot antenna positions.
                 label_antennas (bool): label positions with antenna names.
         '''
-        if self._data:
-            self._data.plot_antennas(label_antennas)
+        if self._ms_data:
+            self._ms_data.plot_antennas(label_antennas)
         else:
             self._logger.error("Error: MS path has not been set")
 
@@ -131,21 +134,31 @@ class MsPlot:
                 data_group (str): data group to use for field and source xds.
                 label_fields (bool): label all fields on the plot if True, else label central field only
         '''
-        if self._data:
-            self._data.plot_phase_centers(data_group, label_fields)
+        if self._ms_data:
+            self._ms_data.plot_phase_centers(data_group, label_fields)
         else:
             self._logger.error("Error: MS path has not been set")
 
     def clear_plots(self):
         ''' Clear plot list '''
-        while self._plots_locked:
-            time.sleep(1)
         self._plots.clear()
+        self._plot_params.clear()
+        self._plot_axes = None
+
+    def unlink_plot_streams(self):
+        ''' Disconnect streams when plot data is going to be replaced '''
+        if self._show_layout and len(self._show_layout.objects) == 4:
+            # Remove dmap (streams with callback) from previous plot
+            self._show_layout[0][0] = self._last_plot.opts(tools=['hover'])
+            # Remove locate widgets
+            self._show_layout[0].pop(1) # cursor locate box
+            self._show_layout.pop(3)    # box locate tab
+            self._show_layout.pop(2)    # points locate tab
 
     def clear_selection(self):
         ''' Clear data selection and restore original ProcessingSet '''
-        if self._data:
-            self._data.clear_selection()
+        if self._ms_data:
+            self._ms_data.clear_selection()
 
         self._plot_inputs.remove_input('selection')
 
@@ -156,25 +169,61 @@ class MsPlot:
         if not self._plots:
             raise RuntimeError("No plots to show.  Run plot() to create plot.")
 
-        # Do not delete plot list until rendered
-        self._plots_locked = True
-
         # Single plot or combine plots into layout using subplots (rows, columns)
         subplots = self._plot_inputs.get_input('subplots')
         layout_plot = self._layout_plots(subplots)
 
-        # Render plot as Bokeh Figure or GridPlot so can show() in script without tying up thread
-        bokeh_fig = hv.render(layout_plot)
-
-        self._plots_locked = False
+        # Add plot inputs column tab
+        inputs_column = None
         if self._plot_params:
-            # Show plot and plot inputs in tabs
-            column = pn.Column()
-            for param in self._plot_params:
-                column.append(pn.pane.Str(param))
-            self._show_layout = pn.Tabs(('Plot', bokeh_fig), ('Plot Inputs', column))
+            inputs_column = pn.Column()
+            self._fill_inputs_column(inputs_column)
+
+        # Show plot and plot inputs in tabs
+        if self._plot_inputs.is_layout():
+            self._show_layout = pn.Tabs(('Plot', layout_plot))
+            if inputs_column:
+                self._show_layout.append(('Plot Inputs', inputs_column))
         else:
-            self._show_layout = pn.pane.Bokeh(bokeh_fig)
+            plot = layout_plot.opts(
+                hv.opts.QuadMesh(
+                    tools=['hover', 'box_select'],
+                    selection_fill_alpha=0.2,    # dim selected areas of plot
+                    nonselection_fill_alpha=1.0, # do not dim unselected areas of plot
+                )
+            )
+            # Add DynamicMap for streams for single plot
+            points = hv.Points([]).opts(
+                size=5,
+                fill_color='white'
+            )
+            dmap = hv.DynamicMap(
+                self._locate,
+                streams=[
+                    hv.streams.PointerXY(),              # cursor location (x, y)
+                    hv.streams.PointDraw(source=points), # fixed points location (data)
+                    hv.streams.BoundsXY()                # box location (bounds)
+                ]
+            )
+
+            # Create panel layout
+            self._show_layout = pn.Tabs(
+                ('Plot', pn.Column(
+                    plot * dmap * points,
+                    pn.WidgetBox(), # cursor info
+                    )
+                ),
+                sizing_mode='stretch_width',
+            )
+            if inputs_column:
+                self._show_layout.append(('Plot Inputs', inputs_column))
+            self._show_layout.append(('Locate Selected Points', pn.Column()))
+            self._show_layout.append(('Locate Selected Box', pn.Column()))
+
+            # return value for locate callback
+            self._last_plot = plot
+
+        # Show panel layout
         self._show_layout.show(title=self._app_name, threaded=True)
 
     def save(self, filename='ms_plot.png', fmt='auto', width=900, height=600):
@@ -271,22 +320,22 @@ class MsPlot:
             Return whether ms changed (false if ms_path is None, not set yet), even if error. '''
         self._ms_info['ms'] = ms_path
         ms_error = ""
-        if not ms_path or (self._data and self._data.is_ms_path(ms_path)):
+        if not ms_path or (self._ms_data and self._ms_data.is_ms_path(ms_path)):
             return False
 
         try:
             # Set new MS data
-            self._data = MsData(ms_path, self._logger)
-            data_path = self._data.get_path()
+            self._ms_data = MsData(ms_path, self._logger)
+            data_path = self._ms_data.get_path()
             self._ms_info['ms'] = data_path
             root, ext = os.path.splitext(os.path.basename(data_path))
             while ext != '':
                 root, ext = os.path.splitext(root)
             self._ms_info['basename'] = root
-            self._ms_info['data_dims'] = self._data.get_data_dimensions()
+            self._ms_info['data_dims'] = self._ms_data.get_data_dimensions()
         except RuntimeError as e:
             ms_error = str(e)
-            self._data = None
+            self._ms_data = None
         if ms_error:
             self._notify(ms_error, 'error', 0)
         return True
@@ -325,4 +374,70 @@ class MsPlot:
                 del plot_inputs[key]
             except KeyError:
                 pass
-        self._plot_params = sorted([f"{key}={value}" for key, value in plot_inputs.items()])
+        if not self._plot_params:
+            self._plot_params = plot_inputs
+        else:
+            for param, value in self._plot_params.items():
+                if plot_inputs[param] != value:
+                    if isinstance(value, list):
+                        # append new value to existing list if not repeat
+                        if plot_inputs[param] != value[-1]:
+                            value.append(plot_inputs[param])
+                    else:
+                        # make list to include new value
+                        value = [value, plot_inputs[param]]
+                    self._plot_params[param] = value
+
+    def _fill_inputs_column(self, inputs_tab_column):
+        ''' Format plot inputs and list in Panel column '''
+        if self._plot_params:
+            inputs_tab_column.clear()
+            plot_params = sorted([f"{key}={value}" for key, value in self._plot_params.items()])
+            for param in plot_params:
+                str_pane = pn.pane.Str(param)
+                str_pane.margin = (0, 10)
+                inputs_tab_column.append(str_pane)
+
+    def _get_plot_axes(self):
+        ''' Return x, y, vis axes '''
+        if not self._plot_axes:
+            x_axis = self._plot_inputs.get_input('x_axis')
+            y_axis = self._plot_inputs.get_input('y_axis')
+            vis_axis = self._plot_inputs.get_input('vis_axis')
+            self._plot_axes = (x_axis, y_axis, vis_axis)
+        return self._plot_axes
+
+    def _locate(self, x, y, data, bounds):
+        ''' Callback for all show plot streams '''
+        self._locate_cursor(x, y, self._plot_data, self._show_layout)
+        self._locate_points(data, self._plot_data, self._show_layout)
+        self._locate_box(bounds, self._plot_data, self._show_layout)
+        return self._last_plot
+
+    def _locate_cursor(self, x, y, plot_data, tabs):
+        ''' Show location from cursor position in cursor locate box '''
+        cursor = (x, y)
+        if cursor_changed(cursor, self._last_cursor):
+            # new cursor position - update cursor location box
+            plot_axes = self._get_plot_axes()
+            cursor_box = tabs[0][1]
+            update_cursor_location(cursor, plot_axes, plot_data, cursor_box)
+            self._last_cursor = cursor
+
+    def _locate_points(self, point_data, plot_data, tabs):
+        ''' Show points locations from point_draw tool '''
+        if points_changed(point_data, self._last_points):
+            # new points position - update selected points location tab
+            plot_axes = self._get_plot_axes()
+            points_tab = tabs[2]
+            update_points_location(point_data, plot_axes, plot_data, points_tab, self._logger)
+            self._last_points = point_data
+
+    def _locate_box(self, box_bounds, plot_data, tabs):
+        ''' Show points locations in box from box_select tool '''
+        if box_changed(box_bounds, self._last_box):
+            # new box_select position - update selected box location tab
+            plot_axes = self._get_plot_axes()
+            box_tab = tabs[3]
+            update_box_location(box_bounds, plot_axes, plot_data, box_tab, self._logger)
+            self._last_box = box_bounds
