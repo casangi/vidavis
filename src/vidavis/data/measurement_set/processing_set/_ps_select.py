@@ -192,7 +192,7 @@ def _select_time(ms_xdt, selection, method, tolerance, drop):
     else:
         # Select str or slice
         ms_xdt = ms_xdt.xr_ms.sel(indexers=None, method=time_method, tolerance=time_tolerance, drop=drop, **selection)
-        if ms_xdt.time.size == 0:
+        if 'time' in ms_xdt.coords and ms_xdt.time.size == 0:
             return ms_xdt, False
     return ms_xdt, True
 

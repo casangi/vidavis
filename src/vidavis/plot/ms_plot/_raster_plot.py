@@ -2,8 +2,6 @@
 Class to create a raster plot of visibility/spectrum data using plot parameters.
 '''
 
-import holoviews as hv
-
 # hvPlot extensions used to plot xarray DataArray and pandas DataFrame
 # pylint: disable=unused-import
 import hvplot.xarray
@@ -120,10 +118,8 @@ class RasterPlot:
         if is_gui: # update data range for colorbar
             self._plot_params['data']['data_range'] = (xda.min().values.item(), xda.max().values.item())
 
-        # Make Overlay plot with hover tools
-        return (flagged_plot * unflagged_plot).opts(
-            hv.opts.QuadMesh(tools=['hover'])
-        )
+        # Make Overlay plot
+        return flagged_plot * unflagged_plot
 
     def _get_plot_title(self, data, plot_inputs, ms_name):
         ''' Form string containing ms name and selected values using data (xArray Dataset) '''

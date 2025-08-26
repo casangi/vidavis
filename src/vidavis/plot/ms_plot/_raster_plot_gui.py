@@ -2,28 +2,31 @@
     Create interactive GUI for ms raster plotting
 '''
 
-import holoviews as hv
 import panel as pn
 from vidavis.plot.ms_plot._ms_plot_selectors import (file_selector, title_selector, style_selector,
     axis_selector, aggregation_selector, iteration_selector, selection_selector, plot_starter)
 
-def create_raster_gui(callbacks, data_dims, x_axis, y_axis):
-    ''' Use Holoviz Panel to create a dashboard for plot inputs and raster plot display. '''
+def create_raster_gui(callbacks, plot_info, empty_plot):
+    ''' Use Holoviz Panel to create a dashboard for plot inputs and raster plot display.
+        ms (str): path to MS, if set
+        plot_info (dict): with keys 'ms', 'data_dims', 'x_axis', 'y_axis'
+        empty_plot (hv.Overlay): QuadMesh overlay plot with no data
+    '''
     # Accordion of widgets for plot inputs
-    selectors = get_plot_input_selectors(callbacks, data_dims, x_axis, y_axis)
+    selectors = get_plot_input_selectors(callbacks, plot_info)
 
     # Plot button and spinner while plotting
-    init_plot = plot_starter(callbacks['plot_updating'])
+    init_plot = plot_starter(callbacks['update_plot'])
 
     # Dynamic map for plot, with callback when inputs change or location needed
-    dmap, points = get_plot_dmap(callbacks, selectors, init_plot)
+    #dmap, points = get_plot_dmap(callbacks, selectors, init_plot)
 
     return pn.Row(
         pn.Tabs(             # Row [0]
             ('Plot',                                 # Tabs[0]
                 pn.Column(
-                    dmap * points,  # [0] plot with hv.Points overlay for point_draw
-                    pn.WidgetBox(), # [1] cursor location
+                    pn.pane.HoloViews(empty_plot), # [0] plot
+                    pn.WidgetBox(),                # [1] cursor location
                 )
             ),
             ('Plot Inputs', pn.Column()),            # Tabs[1]
@@ -43,21 +46,22 @@ def create_raster_gui(callbacks, data_dims, x_axis, y_axis):
         sizing_mode='stretch_height',
     )
 
-def get_plot_input_selectors(callbacks, data_dims, x_axis, y_axis):
+def get_plot_input_selectors(callbacks, plot_info):
     ''' Create accordion of widgets for plot inputs selection '''
     # Select MS
-    file_selectors = file_selector('Path to MeasurementSet (ms or zarr) for plot', '~' , callbacks['filename'])
+    file_selectors = file_selector(callbacks, plot_info['ms'])
 
     # Select style - colormaps, colorbar, color limits
     style_selectors = style_selector(callbacks['style'], callbacks['color'])
 
     # Select x, y, and vis axis
-    axis_selectors = axis_selector(x_axis, y_axis, data_dims, True, callbacks['axes'])
+    axis_selectors = axis_selector(plot_info, True, callbacks['axes'])
 
     # Select from ProcessingSet and MeasurementSet
     selection_selectors = selection_selector(callbacks['select_ps'], callbacks['select_ms'])
 
     # Generic axis options, updated when ms is set
+    data_dims = plot_info['data_dims'] if 'data_dims' in plot_info else None
     axis_options = data_dims if data_dims else []
 
     # Select aggregator and axes to aggregate
@@ -81,25 +85,3 @@ def get_plot_input_selectors(callbacks, data_dims, x_axis, y_axis):
     )
     selectors.toggle = True
     return selectors
-
-def get_plot_dmap(callbacks, selectors, init_plot):
-    ''' Dynamic map for updating plot from callback function '''
-    # Connect plot to filename and plot button; add streams for cursor position, drawn points, and selected box
-    # 'update_plot' callback must have parameters (ms, do_plot, x, y, data, bounds)
-    points = hv.Points([]).opts(
-        size=5,
-        fill_color='white'
-    )
-    dmap = hv.DynamicMap(
-        pn.bind(
-            callbacks['update_plot'],
-            ms=selectors[0][0][0],
-            do_plot=init_plot[0],
-        ),
-        streams=[
-            hv.streams.PointerXY(),              # cursor location (x, y)
-            hv.streams.PointDraw(source=points), # fixed cursor location (data)
-            hv.streams.BoundsXY()                # box location (bounds)
-        ]
-    )
-    return dmap, points
