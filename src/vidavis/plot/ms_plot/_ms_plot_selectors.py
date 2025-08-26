@@ -7,21 +7,23 @@ import panel as pn
 from vidavis.bokeh._palette import available_palettes
 from vidavis.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, AGGREGATOR_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS, DEFAULT_UNFLAGGED_CMAP, DEFAULT_FLAGGED_CMAP
 
-def file_selector(description, start_dir, callback):
+def file_selector(callbacks, ms):
     ''' Return a layout for file selection with input description and start directory.
         Includes a TextInput and a FileSelector, with a callback to set TextInput from FileSelector.
     '''
-    filename = pn.widgets.TextInput(
-        description=description,
+    input_filename = pn.widgets.TextInput(
+        description='Path to MeasurementSet (ms or zarr)',
         name="Filename",
         placeholder='Enter filename or use file browser below',
+        value=ms,
         sizing_mode='stretch_width',
     )
+    set_file = pn.bind(callbacks['set_filename'], input_filename)
 
     file_select = pn.widgets.FileSelector(
-        start_dir,
+        '~',
     )
-    select_file = pn.bind(callback, file_select)
+    select_file = pn.bind(callbacks['select_filename'], file_select)
 
     fs_card = pn.Card(
         file_select,
@@ -33,8 +35,9 @@ def file_selector(description, start_dir, callback):
 
     return pn.Column(
         pn.Row( # [0]
-            filename,   # [0]
-            select_file # [1]
+            input_filename,   # [0]
+            set_file,   # [1]
+            select_file # [2]
         ),
         fs_card, # [1]
         width_policy='min',
@@ -90,18 +93,22 @@ def style_selector(style_callback, color_range_callback):
         pn.Row( # [1]
             colorbar_checkbox,         # [0]
             flagged_colorbar_checkbox, # [1]
+            select_style,              # [2]
         ),
-        select_style, # [2]
-        pn.Row( # [3]
+        pn.Row( # [2]
             color_mode_selector, # [0]
             color_range_slider,  # [1]
+            select_color_range,  # [2]
         ),
-        select_color_range, # [4]
         width_policy='min',
     )
 
-def axis_selector(x_axis, y_axis, axis_options, include_vis, callback):
+def axis_selector(plot_info, include_vis, callback):
     ''' Return layout of selectors for x-axis, y-axis, and vis-axis '''
+    axis_options = plot_info['data_dims'] if 'data_dims' in plot_info else []
+    x_axis = plot_info['x_axis'] if 'x_axis' in plot_info else ''
+    y_axis = plot_info['y_axis'] if 'y_axis' in plot_info else ''
+
     x_options = axis_options if axis_options else [x_axis]
     x_selector = pn.widgets.Select(
         name="X Axis",

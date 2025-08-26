@@ -41,12 +41,12 @@ def raster_data(ps_xdt, plot_inputs, logger):
     # Apply aggregator
     raster_xds = aggregate_data(raster_xds, plot_inputs, logger)
 
-    logger.debug(f"Plotting visibility data with shape: {raster_xds[correlated_data].shape}")
+    logger.debug(f"Plotting visibility data with shape: {dict(raster_xds[correlated_data].sizes)}")
     return raster_xds
 
 def _select_ms(ps_xdt, logger, **selection):
-    ''' Select ProcessingSet MeasurementSets for raster data '''
-    return select_ms(ps_xdt, logger, indexers=None, method=None, tolerance=None, drop=False, **selection)
+    ''' Select ProcessingSet MeasurementSets for raster data. '''
+    return select_ms(ps_xdt, logger, indexers=None, method=None, tolerance=None, **selection)
 
 def _select_raster_dimensions(ps_xdt, plot_inputs, logger):
     ''' Select default dimensions if needed for raster data '''
@@ -64,6 +64,9 @@ def _select_raster_dimensions(ps_xdt, plot_inputs, logger):
             dim_selection[dim] = _get_first_dim_value(ps_xdt, dim, plot_inputs, logger)
         elif 'iter_axis' in plot_inputs and dim == plot_inputs['iter_axis']:
             dim_selection[dim] = selection[dim]
+        elif selection and dim in selection and isinstance(selection[dim], list):
+            dim_selection[dim] = selection[dim][0]
+
     if dim_selection:
         # Remove from selection for next plot
         if 'iter_axis' in plot_inputs and plot_inputs['iter_axis']:

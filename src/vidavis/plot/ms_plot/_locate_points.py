@@ -259,7 +259,7 @@ def _layout_point_location(text_list):
             location_row.append(location_col)
             location_col = pn.Column()
 
-        static_text.margin = (0, 10) # default (5, 10)
+        static_text.margin = (0, 5) # default (5, 10)
         location_col.append(static_text)
 
     # Add last column

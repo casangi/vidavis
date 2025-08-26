@@ -12,16 +12,11 @@ import holoviews as hv
 import numpy as np
 import panel as pn
 from selenium import webdriver
-
-try:
-    from toolviper.utils.logger import get_logger, setup_logger
-    _HAVE_TOOLVIPER = True
-except ImportError:
-    _HAVE_TOOLVIPER = False
+from toolviper.utils.logger import setup_logger
 
 from vidavis.data.measurement_set._ms_data import MsData
 from vidavis.plot.ms_plot._locate_points import cursor_changed, points_changed, box_changed, update_cursor_location, update_points_location, update_box_location
-from vidavis.toolbox import AppContext, get_logger
+from vidavis.toolbox import AppContext
 
 class MsPlot:
 
@@ -33,11 +28,8 @@ class MsPlot:
             raise RuntimeError("Must provide ms/zarr path if gui not shown.")
 
         # Set logger: use toolviper logger else casalog else python logger
-        if _HAVE_TOOLVIPER:
-            self._logger = setup_logger(app_name, log_to_term=True, log_to_file=log_to_file, log_file=app_name.lower(), log_level=log_level.upper())
-        else:
-            self._logger = get_logger()
-            self._logger.setLevel(log_level.upper())
+        self._logger = setup_logger(app_name, log_to_term=True, log_to_file=log_to_file, log_file=app_name.lower(), log_level=log_level.upper())
+        self._logger.propagate = False # avoid repeating unformatted log messages in console
 
         # Save parameters; ms set below
         self._show_gui = show_gui
@@ -61,23 +53,28 @@ class MsPlot:
             self._toast = None # for destroy() with new plot or new notification
 
             # Initialize gui panel for callbacks
+            self._gui_panel = pn.Row()
             self._gui_plot_data = None
             self._gui_selection = {}
-            self._gui_layout = None
-            self._first_gui_plot = True
 
             # For _update_plot callback: check if inputs changed
             self._last_plot_inputs = None
             self._last_style_inputs = None
+            self._last_gui_plot = None # return value
 
         # For locate callback: check if points changed
         self._plot_axes = None
         self._last_cursor = None
         self._last_points = None
         self._last_box = None
+        self._locate_plot_options = {
+            'tools': ['hover', 'box_select'],
+            'selection_fill_alpha': 0.2,    # dim selected areas of plot
+            'nonselection_fill_alpha': 1.0, # do not dim unselected areas of plot
+        }
 
         # Initialize non-gui show() panel for callbacks
-        self._show_layout = None
+        self._show_panel = None
         self._plot_data = None
 
         # Set data (if ms)
@@ -144,22 +141,24 @@ class MsPlot:
         self._plots.clear()
         self._plot_params.clear()
         self._plot_axes = None
+        if self._gui_panel:
+            self._gui_panel[0][2].clear() # locate points
+            self._gui_panel[0][3].clear() # locate box
 
     def unlink_plot_streams(self):
         ''' Disconnect streams when plot data is going to be replaced '''
-        if self._show_layout and len(self._show_layout.objects) == 4:
+        if self._show_panel and len(self._show_panel.objects) == 4:
             # Remove dmap (streams with callback) from previous plot
-            self._show_layout[0][0] = self._last_plot.opts(tools=['hover'])
+            self._show_panel[0][0] = self._last_plot.opts(tools=['hover'])
             # Remove locate widgets
-            self._show_layout[0].pop(1) # cursor locate box
-            self._show_layout.pop(3)    # box locate tab
-            self._show_layout.pop(2)    # points locate tab
+            self._show_panel[0].pop(1) # cursor locate box
+            self._show_panel.pop(3)    # box locate tab
+            self._show_panel.pop(2)    # points locate tab
 
     def clear_selection(self):
         ''' Clear data selection and restore original ProcessingSet '''
         if self._ms_data:
             self._ms_data.clear_selection()
-
         self._plot_inputs.remove_input('selection')
 
     def show(self):
@@ -181,50 +180,37 @@ class MsPlot:
 
         # Show plot and plot inputs in tabs
         if self._plot_inputs.is_layout():
-            self._show_layout = pn.Tabs(('Plot', layout_plot))
+            self._show_panel = pn.Tabs(('Plot', layout_plot))
             if inputs_column:
-                self._show_layout.append(('Plot Inputs', inputs_column))
+                self._show_panel.append(('Plot Inputs', inputs_column))
         else:
             plot = layout_plot.opts(
-                hv.opts.QuadMesh(
-                    tools=['hover', 'box_select'],
-                    selection_fill_alpha=0.2,    # dim selected areas of plot
-                    nonselection_fill_alpha=1.0, # do not dim unselected areas of plot
-                )
+                hv.opts.QuadMesh(**self._locate_plot_options),
+                hv.opts.Scatter(**self._locate_plot_options)
             )
             # Add DynamicMap for streams for single plot
-            points = hv.Points([]).opts(
-                size=5,
-                fill_color='white'
-            )
-            dmap = hv.DynamicMap(
-                self._locate,
-                streams=[
-                    hv.streams.PointerXY(),              # cursor location (x, y)
-                    hv.streams.PointDraw(source=points), # fixed points location (data)
-                    hv.streams.BoundsXY()                # box location (bounds)
-                ]
-            )
+            dmap = self._get_locate_dmap(self._locate)
 
             # Create panel layout
-            self._show_layout = pn.Tabs(
-                ('Plot', pn.Column(
-                    plot * dmap * points,
-                    pn.WidgetBox(), # cursor info
+            self._show_panel = pn.Tabs(
+                ('Plot',
+                    pn.Column(
+                        plot * dmap,
+                        pn.WidgetBox(), # cursor info
                     )
                 ),
                 sizing_mode='stretch_width',
             )
             if inputs_column:
-                self._show_layout.append(('Plot Inputs', inputs_column))
-            self._show_layout.append(('Locate Selected Points', pn.Column()))
-            self._show_layout.append(('Locate Selected Box', pn.Column()))
+                self._show_panel.append(('Plot Inputs', inputs_column))
+            self._show_panel.append(('Locate Selected Points', pn.Column()))
+            self._show_panel.append(('Locate Selected Box', pn.Column()))
 
             # return value for locate callback
             self._last_plot = plot
 
         # Show panel layout
-        self._show_layout.show(title=self._app_name, threaded=True)
+        self._show_panel.show(title=self._app_name, threaded=True)
 
     def save(self, filename='ms_plot.png', fmt='auto', width=900, height=600):
         '''
@@ -397,6 +383,22 @@ class MsPlot:
                 str_pane = pn.pane.Str(param)
                 str_pane.margin = (0, 10)
                 inputs_tab_column.append(str_pane)
+
+    def _get_locate_dmap(self, callback):
+        ''' Return DynamicMap with streams callback to locate points '''
+        points = hv.Points([]).opts(
+            size=5,
+            fill_color='white'
+        )
+        dmap = hv.DynamicMap(
+            callback,
+            streams=[
+                hv.streams.PointerXY(),              # cursor location (x, y)
+                hv.streams.PointDraw(source=points), # fixed points location (data)
+                hv.streams.BoundsXY()                # box location (bounds)
+            ]
+        )
+        return dmap * points
 
     def _get_plot_axes(self):
         ''' Return x, y, vis axes '''

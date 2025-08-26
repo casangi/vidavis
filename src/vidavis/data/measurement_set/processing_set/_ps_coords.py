@@ -15,6 +15,8 @@ def set_coordinates(ms_xdt):
 
 def set_datetime_coordinate(ms_xds):
     ''' Convert float time to datetime for plotting. '''
+    if 'time' not in ms_xds.coords:
+        return
     time_attrs = ms_xds.time.attrs
     try:
         ms_xds.coords['time'] = to_datetime(ms_xds.time, unit=time_attrs['units'], origin=time_attrs['format'])
@@ -47,6 +49,8 @@ def set_index_coordinates(ms_xds, coordinates):
 
 def _set_frequency_unit(ms_xdt):
     ''' Convert frequency to GHz. Note attrs (channel_width, reference_frequency) still have Hz units in dict '''
+    if 'frequency' not in ms_xdt.coords:
+        return
     if ms_xdt.frequency.attrs['units'] == "Hz":
         frequency_xda = ms_xdt.frequency / 1e9
         frequency_attrs = ms_xdt.frequency.attrs

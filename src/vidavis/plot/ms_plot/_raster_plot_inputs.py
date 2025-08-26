@@ -10,7 +10,7 @@ class RasterPlotInputs:
     '''
 
     def __init__(self):
-        self._plot_inputs = {}
+        self._plot_inputs = {'selection': {}}
 
     def get_inputs(self):
         ''' Getter for stored plot inputs '''
@@ -31,8 +31,6 @@ class RasterPlotInputs:
 
     def set_selection(self, selection):
         ''' Add selection dict to existing selection in plot inputs '''
-        if 'selection' not in self._plot_inputs:
-            self._plot_inputs['selection'] = {}
         self._plot_inputs['selection'] |= selection
         if 'data_group_name' in selection:
             self._plot_inputs['data_group'] = selection['data_group_name']
@@ -41,9 +39,7 @@ class RasterPlotInputs:
         ''' Return value for selection key '''
         try:
             return self.get_input('selection')[key]
-        except (TypeError, KeyError):
-            # TypeError: get_input returned None for 'selection'
-            # KeyError: key not in selection
+        except KeyError:
             return None
 
     def set_inputs(self, plot_inputs):
@@ -54,10 +50,13 @@ class RasterPlotInputs:
 
     def remove_input(self, name):
         ''' Remove plot input with name, if it exists '''
-        try:
-            del self._plot_inputs[name]
-        except KeyError:
-            pass
+        if name == 'selection':
+            self._plot_inputs['selection'] = {}
+        else:
+            try:
+                del self._plot_inputs[name]
+            except KeyError:
+                pass
 
     def check_inputs(self):
         ''' Check input values are valid, adjust for data dims '''

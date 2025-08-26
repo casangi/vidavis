@@ -2,7 +2,7 @@
 
 def inputs_changed(plot_inputs, last_plot_inputs):
     ''' Check if inputs changed and need new plot '''
-    if not last_plot_inputs:
+    if plot_inputs and not last_plot_inputs:
         return True
 
     for key, val in plot_inputs.items():
