@@ -141,7 +141,7 @@ class MsPlot:
         self._plots.clear()
         self._plot_params.clear()
         self._plot_axes = None
-        if self._gui_panel:
+        if self._gui_panel is not None:
             self._gui_panel[0][2].clear() # locate points
             self._gui_panel[0][3].clear() # locate box
 
@@ -163,14 +163,14 @@ class MsPlot:
 
     def show(self):
         ''' 
-        Show interactive Bokeh plots in a browser. Plot tools include pan, zoom, hover, and save.
+        Show interactive Bokeh plots in a browser.
         '''
         if not self._plots:
             raise RuntimeError("No plots to show.  Run plot() to create plot.")
 
         # Single plot or combine plots into layout using subplots (rows, columns)
         subplots = self._plot_inputs.get_input('subplots')
-        layout_plot = self._layout_plots(subplots)
+        plot = self._layout_plots(subplots)
 
         # Add plot inputs column tab
         inputs_column = None
@@ -178,13 +178,13 @@ class MsPlot:
             inputs_column = pn.Column()
             self._fill_inputs_column(inputs_column)
 
-        # Show plot and plot inputs in tabs
+        # Show plots and plot inputs in tabs
         if self._plot_inputs.is_layout():
-            self._show_panel = pn.Tabs(('Plot', layout_plot))
+            self._show_panel = pn.Tabs(('Plot', plot))
             if inputs_column:
                 self._show_panel.append(('Plot Inputs', inputs_column))
         else:
-            plot = layout_plot.opts(
+            plot = plot.opts(
                 hv.opts.QuadMesh(**self._locate_plot_options),
                 hv.opts.Scatter(**self._locate_plot_options)
             )
@@ -231,10 +231,10 @@ class MsPlot:
         # Combine plots into layout using subplots (rows, columns) if not single plot.
         # Set fixed size for export.
         subplots = self._plot_inputs.get_input('subplots')
-        layout_plot = self._layout_plots(subplots, (width, height))
+        plot = self._layout_plots(subplots, (width, height))
 
         iter_axis = self._plot_inputs.get_input('iter_axis')
-        if not isinstance(layout_plot, hv.Layout) and iter_axis:
+        if not isinstance(plot, hv.Layout) and iter_axis:
             # Save iterated plots individually, with index appended to filename
             iter_range = self._plot_inputs.get_input('iter_range')
             plot_idx = 0 if iter_range is None else iter_range[0]
@@ -243,7 +243,7 @@ class MsPlot:
                 self._save_plot(plot, exportname, fmt)
                 plot_idx += 1
         else:
-            self._save_plot(layout_plot, filename, fmt)
+            self._save_plot(plot, filename, fmt)
         self._logger.debug("Save elapsed time: %.2fs.", time.time() - start_time)
 
     def _layout_plots(self, subplots, fixed_size=None):

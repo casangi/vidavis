@@ -42,21 +42,23 @@ class MsRaster(MsPlot):
 
     def __init__(self, ms=None, log_level="info", log_to_file=True, show_gui=False):
         super().__init__(ms, log_level, log_to_file, show_gui, "MsRaster")
-        self._raster_plot = RasterPlot()
         self._plot_inputs = RasterPlotInputs()
         self._plot_inputs.set_input('ms', self._ms_info['ms'])
+        self._raster_plot = RasterPlot()
 
         # Calculations for color limits
         self._spw_stats = {}
         self._spw_color_limits = {}
 
         if show_gui:
-            # Initial plot for gui
-            self._empty_plot = self._create_empty_plot()
-
-            # Set default style and plot inputs to use when launching gui
+            # Set default style and plot inputs to use for empty plot and gui
             self.set_style_params()
             self.plot()
+
+            # Initial plot for gui
+            self._create_empty_plot()
+
+            # Create and show gui panel
             self._launch_gui()
 
             # Set filename TextInput widget to input ms
@@ -181,6 +183,9 @@ class MsRaster(MsPlot):
 
         start = time.time()
 
+        # If previous plot was shown, unlink from data streams
+        super().unlink_plot_streams()
+
         # Clear for new plot
         self._reset_plot(clear_plots)
 
@@ -193,9 +198,6 @@ class MsRaster(MsPlot):
         selection = self._plot_inputs.get_input('selection')
         if selection:
             self._logger.info("Create raster plot with selection: %s", selection)
-
-        # If previous plot was shown, unlink from data streams
-        super().unlink_plot_streams()
 
         if not self._show_gui:
             # Cannot plot if no MS
@@ -489,14 +491,12 @@ class MsRaster(MsPlot):
                     self._plot_inputs.set_input('data_dims', self._ms_info['data_dims'])
                     self._plot_inputs.check_inputs()
                     gui_plot = self._do_gui_plot()
+                    self._last_gui_plot = gui_plot # save plot for locate callback
                     self._logger.info("Plot update complete")
 
-                    # Add DynamicMap for streams for single plot
+                    # Put plot with dmap for locate streams in gui panel
                     dmap = self._get_locate_dmap(self._locate_gui_points)
-
-                    # Put plot with dmap in gui panel, save for locate callback
                     self._gui_panel[0][0][0].object = gui_plot * dmap
-                    self._last_gui_plot = gui_plot
                 except (ValueError, TypeError, KeyError, RuntimeError) as e:
                     # Clear plot, inputs invalid
                     self._notify(str(e), 'error', 0)
@@ -550,25 +550,13 @@ class MsRaster(MsPlot):
                     return layout_plot
 
                 # Make single Overlay raster plot for DynamicMap
-                plot = self._do_plot(True)
-                plot_params = self._raster_plot.get_plot_params()
+                gui_plot = self._do_plot(True)
 
                 # Update color limits in gui with data range
+                plot_params = self._raster_plot.get_plot_params()
                 self._update_color_range(plot_params)
 
-                # Update colorbar labels and limits
-                try:
-                    plot.QuadMesh.I = self._set_plot_colorbar(plot.QuadMesh.I, plot_params, "flagged")
-                    plot.QuadMesh.II = self._set_plot_colorbar(plot.QuadMesh.II, plot_params, "unflagged")
-                    return plot.opts(
-                        hv.opts.QuadMesh(**self._locate_plot_options),
-                    )
-                except ValueError:
-                    plot.Scatter.I = self._set_plot_colorbar(plot.Scatter.I, plot_params, "flagged")
-                    plot.Scatter.II = self._set_plot_colorbar(plot.Scatter.II, plot_params, "unflagged")
-                    return plot.opts(
-                        hv.opts.Scatter(**self._locate_plot_options)
-                    )
+                return gui_plot
             except RuntimeError as e:
                 error = f"Plot failed: {str(e)}"
                 super()._notify(error, "error", 0)
@@ -579,7 +567,7 @@ class MsRaster(MsPlot):
     def _create_empty_plot(self):
         ''' Create empty Overlay plot for DynamicMap with colormap params and required tools enabled '''
         plot_params = self._raster_plot.get_plot_params()
-        plot = hv.Overlay(
+        self._empty_plot = hv.Overlay(
             hv.QuadMesh([]).opts(
                 colorbar=plot_params['style']['show_flagged_colorbar'],
                 cmap=plot_params['style']['flagged_cmap'],
@@ -591,43 +579,6 @@ class MsRaster(MsPlot):
                 responsive=True,
             )
         )
-        return plot.opts(
-            hv.opts.QuadMesh(
-                tools=['hover', 'box_select'],
-                selection_fill_alpha=0.5, # dim selected areas of plot
-                nonselection_fill_alpha=1.0, # do not dim unselected areas of plot
-            )
-        )
-
-    def _set_plot_colorbar(self, plot, plot_params, plot_type):
-        ''' Update plot colorbar labels and limits
-                plot_type is "unflagged" or "flagged"
-        '''
-        # Update colorbar labels if shown, else hide
-        colorbar_key = plot_type + '_colorbar'
-        if plot_params['plot'][colorbar_key]:
-            c_label = plot_params['plot']['axis_labels']['c']['label']
-            cbar_title = "Flagged " + c_label if plot_type == "flagged" else c_label
-
-            plot = plot.opts(
-                colorbar=True,
-                backend_opts={
-                    "colorbar.title": cbar_title,
-                }
-            )
-        else:
-            plot = plot.opts(
-                colorbar=False,
-            )
-
-        # Update plot color limits
-        color_limits = plot_params['plot']['color_limits']
-        if color_limits:
-            plot = plot.opts(
-                clim=color_limits,
-            )
-
-        return plot
 
     def _update_color_range(self, plot_params):
         ''' Set the start/end range on the colorbar to min/max of plot data '''

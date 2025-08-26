@@ -118,7 +118,7 @@ class RasterPlot:
         if is_gui: # update data range for colorbar
             self._plot_params['data']['data_range'] = (xda.min().values.item(), xda.max().values.item())
 
-        # Make Overlay plot with hover tools
+        # Make Overlay plot
         return flagged_plot * unflagged_plot
 
     def _get_plot_title(self, data, plot_inputs, ms_name):
