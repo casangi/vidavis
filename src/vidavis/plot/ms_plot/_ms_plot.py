@@ -53,7 +53,6 @@ class MsPlot:
             self._toast = None # for destroy() with new plot or new notification
 
             # Initialize gui panel for callbacks
-            self._gui_panel = pn.Row()
             self._gui_plot_data = None
             self._gui_selection = {}
 
@@ -73,7 +72,8 @@ class MsPlot:
             'nonselection_fill_alpha': 1.0, # do not dim unselected areas of plot
         }
 
-        # Initialize non-gui show() panel for callbacks
+        # Initialize panels for callbacks
+        self._gui_panel = None
         self._show_panel = None
         self._plot_data = None
 
@@ -411,9 +411,9 @@ class MsPlot:
 
     def _locate(self, x, y, data, bounds):
         ''' Callback for all show plot streams '''
-        self._locate_cursor(x, y, self._plot_data, self._show_layout)
-        self._locate_points(data, self._plot_data, self._show_layout)
-        self._locate_box(bounds, self._plot_data, self._show_layout)
+        self._locate_cursor(x, y, self._plot_data, self._show_panel)
+        self._locate_points(data, self._plot_data, self._show_panel)
+        self._locate_box(bounds, self._plot_data, self._show_panel)
         return self._last_plot
 
     def _locate_cursor(self, x, y, plot_data, tabs):
