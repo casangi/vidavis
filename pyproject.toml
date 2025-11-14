@@ -8,8 +8,9 @@ authors = [
 ]
 
 dependencies = [
-    "bokeh==3.6.1",
+    "bokeh>=3.7, <3.9",
     "matplotlib",
+    "panel==1.8.2",
     "hvplot",
     "graphviper",
     "selenium"

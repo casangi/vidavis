@@ -65,7 +65,7 @@ def plot_ms_raster():
 
     # ------------------------------------------------------------------
     # Demo vis axis options for observe target intent
-    intent_selection = {'intents': 'OBSERVE_TARGET#ON_SOURCE'}
+    intent_selection = {'scan_intents': 'OBSERVE_TARGET#ON_SOURCE'}
     msr.select_ps(**intent_selection)
 
     for vis_axis in ['amp', 'phase', 'real', 'imag']:

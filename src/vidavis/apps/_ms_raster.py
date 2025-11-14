@@ -184,7 +184,7 @@ class MsRaster(MsPlot):
         start = time.time()
 
         # If previous plot was shown, unlink from data streams
-        super().unlink_plot_streams()
+        super().unlink_plot_locate()
 
         # Clear for new plot
         self._reset_plot(clear_plots)

@@ -145,7 +145,7 @@ class MsPlot:
             self._gui_panel[0][2].clear() # locate points
             self._gui_panel[0][3].clear() # locate box
 
-    def unlink_plot_streams(self):
+    def unlink_plot_locate(self):
         ''' Disconnect streams when plot data is going to be replaced '''
         if self._show_panel and len(self._show_panel.objects) == 4:
             # Remove dmap (streams with callback) from previous plot

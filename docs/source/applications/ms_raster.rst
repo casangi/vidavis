@@ -125,12 +125,53 @@ values can be used to do selection for a plot (see ``select_ps()`` in
 :ref:`select_data`)::
 
     >>> msr.summary(data_group='base', columns=None)
-                        name                                                                            intents              shape polarization                        scan_name                         spw_name     field_name   source_name line_name                       field_coords  start_frequency  end_frequency  
-    0  sis14_twhya_selfcal_0 [CALIBRATE_BANDPASS#ON_SOURCE, CALIBRATE_PHASE#ON_SOURCE, CALIBRATE_WVR#ON_SOURCE]  (20, 210, 384, 2)     [XX, YY]                              [4] ALMA_RB_07#BB_2#SW-01#FULL_RES_0  [J0522-364_0] [J0522-364_0]        []  [fk5, 5h22m57.98s, -36d27m30.85s]     3.725331e+11   3.727669e+11  
-    1  sis14_twhya_selfcal_1 [CALIBRATE_BANDPASS#ON_SOURCE, CALIBRATE_PHASE#ON_SOURCE, CALIBRATE_WVR#ON_SOURCE]  (20, 171, 384, 2)     [XX, YY]                             [33] ALMA_RB_07#BB_2#SW-01#FULL_RES_0      [3c279_6]     [Unknown]        []  [fk5, 12h56m11.17s, -5d47m21.52s]     3.725331e+11   3.727669e+11  
-    2  sis14_twhya_selfcal_2    [CALIBRATE_AMPLI#ON_SOURCE, CALIBRATE_PHASE#ON_SOURCE, CALIBRATE_WVR#ON_SOURCE]  (20, 190, 384, 2)     [XX, YY]                              [7] ALMA_RB_07#BB_2#SW-01#FULL_RES_0      [Ceres_2] [J1037-295_2]        []   [fk5, 6h10m15.95s, 23d22m06.91s]     3.725331e+11   3.727669e+11  
-    3  sis14_twhya_selfcal_3                               [CALIBRATE_PHASE#ON_SOURCE, CALIBRATE_WVR#ON_SOURCE]  (80, 210, 384, 2)     [XX, YY] [10, 14, 18, 22, 26, 30, 34, 38] ALMA_RB_07#BB_2#SW-01#FULL_RES_0  [J1037-295_3]    [TW Hya_3]        [] [fk5, 10h37m16.08s, -29d34m02.81s]     3.725331e+11   3.727669e+11  
-    4  sis14_twhya_selfcal_4                                                         [OBSERVE_TARGET#ON_SOURCE] (270, 210, 384, 2)     [XX, YY]         [12, 16, 20, 24, 28, 36] ALMA_RB_07#BB_2#SW-01#FULL_RES_0     [TW Hya_5]     [3c279_4]        [] [fk5, 11h01m51.80s, -34d42m17.37s]     3.725331e+11   3.727669e+11
+                        name  \
+    0  sis14_twhya_selfcal_0   
+    1  sis14_twhya_selfcal_1   
+    2  sis14_twhya_selfcal_2   
+    3  sis14_twhya_selfcal_3   
+
+                                                                             scan_intents  \
+    0  [CALIBRATE_BANDPASS#ON_SOURCE, CALIBRATE_PHASE#ON_SOURCE, CALIBRATE_WVR#ON_SOURCE]   
+    1     [CALIBRATE_AMPLI#ON_SOURCE, CALIBRATE_PHASE#ON_SOURCE, CALIBRATE_WVR#ON_SOURCE]   
+    2                                [CALIBRATE_PHASE#ON_SOURCE, CALIBRATE_WVR#ON_SOURCE]   
+    3                                                          [OBSERVE_TARGET#ON_SOURCE]   
+
+                    shape      execution_block_UID polarization  \
+    0   (40, 210, 384, 2)  uid://A002/X554543/X207     [XX, YY]   
+    1   (20, 190, 384, 2)  uid://A002/X554543/X207     [XX, YY]   
+    2   (80, 210, 384, 2)  uid://A002/X554543/X207     [XX, YY]   
+    3  (270, 210, 384, 2)  uid://A002/X554543/X207     [XX, YY]   
+
+                              scan_name                          spw_name  \
+    0                           [33, 4]  ALMA_RB_07#BB_2#SW-01#FULL_RES_0   
+    1                               [7]  ALMA_RB_07#BB_2#SW-01#FULL_RES_0   
+    2  [10, 14, 18, 22, 26, 30, 34, 38]  ALMA_RB_07#BB_2#SW-01#FULL_RES_0   
+    3          [12, 16, 20, 24, 28, 36]  ALMA_RB_07#BB_2#SW-01#FULL_RES_0   
+
+         spw_intents              field_name               source_name line_name  \
+    0  [UNSPECIFIED]  [3c279_6, J0522-364_0]  [J0522-364_0, Unknown_5]        []   
+    1  [UNSPECIFIED]               [Ceres_2]             [J1037-295_2]        []   
+    2  [UNSPECIFIED]           [J1037-295_3]                [TW Hya_3]        []   
+    3  [UNSPECIFIED]              [TW Hya_5]                 [3c279_4]        []   
+
+                             field_coords session_reference_UID  \
+    0                  Multi-Phase-Center                   ---   
+    1    [fk5, 6h10m15.95s, 23d22m06.91s]                   ---   
+    2  [fk5, 10h37m16.08s, -29d34m02.81s]                   ---   
+    3  [fk5, 11h01m51.80s, -34d42m17.37s]                   ---   
+
+         scheduling_block_UID             project_UID  start_frequency  \
+    0  uid://A002/X327408/X73  uid://A002/X327408/X6f     3.725331e+11   
+    1  uid://A002/X327408/X73  uid://A002/X327408/X6f     3.725331e+11   
+    2  uid://A002/X327408/X73  uid://A002/X327408/X6f     3.725331e+11   
+    3  uid://A002/X327408/X73  uid://A002/X327408/X6f     3.725331e+11   
+
+       end_frequency  
+    0   3.727669e+11  
+    1   3.727669e+11  
+    2   3.727669e+11  
+    3   3.727669e+11
 
 If a subset of columns is of interest, set the ``columns`` parameter to one or
 more column names::
@@ -143,16 +184,21 @@ To view the summary information grouped by MSv4, set ``columns='by_ms'`` (only
 the first MS is shown here)::
 
     >>> msr.summary(data_group='base', columns='by_ms')
-    MSv4 name: sis14_twhya_selfcal_0
-    intent: ['CALIBRATE_BANDPASS#ON_SOURCE', 'CALIBRATE_PHASE#ON_SOURCE', 'CALIBRATE_WVR#ON_SOURCE']
-    shape: 20 times, 210 baselines, 384 channels, 2 polarizations
+    name: sis14_twhya_selfcal_0
+    scan_intents: ['CALIBRATE_BANDPASS#ON_SOURCE', 'CALIBRATE_PHASE#ON_SOURCE', 'CALIBRATE_WVR#ON_SOURCE']
+    shape: 40 times, 210 baselines, 384 channels, 2 polarizations
+    execution_block_UID: uid://A002/X554543/X207
     polarization: ['XX' 'YY']
-    scan_name: ['4']
+    scan_name: ['33', '4']
     spw_name: ALMA_RB_07#BB_2#SW-01#FULL_RES_0
-    field_name: ['J0522-364_0']
-    source_name: ['J0522-364_0']
+    spw_intents: ['UNSPECIFIED']
+    field_name: ['3c279_6', 'J0522-364_0']
+    source_name: ['J0522-364_0', 'Unknown_5']
     line_name: []
-    field_coords: (fk5) 5h22m57.98s -36d27m30.85s
+    field_coords: (M) u l
+    session_reference_UID: ---
+    scheduling_block_UID: uid://A002/X327408/X73
+    project_UID: uid://A002/X327408/X6f
     frequency range: 3.725331e+11 - 3.727669e+11
 
 .. _get_dimension_values:
