@@ -54,38 +54,43 @@ def plot_ms_selection():
     msr = MsRaster(ms_path, log_level='info', show_gui=False)
     select_processing_set(msr)
     select_measurement_set_dimensions(msr)
+    msr.unlink_plot_locate()
 
 def select_processing_set(msr):
     # ProcessingSet selection using summary column names and 'data_group_name', and Pandas query
-    # Columns: 'name', 'intents', 'shape', 'polarization', 'scan_name', 'spw_name',
+    # Columns: 'name', 'scan_intents', 'shape', 'polarization', 'scan_name', 'spw_name',
     #   'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
     # For selection options, use msr.summary() and msr.data_groups()
     # Select single summary values
     msr.select_ps(field_name='TW Hya_5', scan_name='16', polarization='XX')
     msr.plot()
     msr.show()
+    msr.save()
 
     # Selections are cumulative.
     # Clear selection each time to start with unselected PS.
     msr.clear_selection()
 
     # Select summary value with dict
-    intent_selection = {'intents': 'OBSERVE_TARGET#ON_SOURCE'}
+    intent_selection = {'scan_intents': 'OBSERVE_TARGET#ON_SOURCE'}
     msr.select_ps(**intent_selection)
     msr.plot()
     msr.show()
+    msr.save()
 
     # Select list of summary values
     msr.clear_selection()
     msr.select_ps(field_name=['J1037-295_3', 'TW Hya_5'], scan_name=['16', '18', '20'], polarization='XX')
     msr.plot()
     msr.show()
+    msr.save()
 
     # Select summary partial match 
     msr.clear_selection()
-    msr.select_ps(string_exact_match=False, query=None, intents='CALIBRATE_BANDPASS')
+    msr.select_ps(string_exact_match=False, query=None, scan_intents='CALIBRATE_BANDPASS')
     msr.plot()
     msr.show()
+    msr.save()
 
 def select_measurement_set_dimensions(msr):
     # MeasurementSet selection using dimensions names and values, as well as 'data_group_name'.
@@ -111,24 +116,28 @@ def select_time(msr):
     msr.select_ms(time='19-Nov-2012 08:00:04')
     msr.plot(y_axis='frequency') # default is 'time'
     msr.show()
+    msr.save()
 
     # Select single time value nearest 8:45 within 5 second tolerance
     msr.clear_selection()
     msr.select_ms(time='19-Nov-2012 08:45:00', method='nearest', tolerance=5)
     msr.plot(y_axis='frequency') # default is 'time'
     msr.show()
+    msr.save()
 
     # Select list of time values within 30 second tolerance for time axis
     msr.clear_selection()
     msr.select_ms(indexers=None, method='nearest', tolerance=30, drop=False, time=['19-Nov-2012 08:45:00', '19-Nov-2012 08:50:00', '19-Nov-2012 08:58:00', '19-Nov-2012 09:00:00'])
     msr.plot()
     msr.show()
+    msr.save()
 
     # Select slice of time values between 9:00 and 9:12 for time axis; method and tolerance not used for slice.
     msr.clear_selection()
     msr.select_ms(time=slice('19-Nov-2012 09:00:00', '19-Nov-2012 09:12:00'))
     msr.plot()
     msr.show()
+    msr.save()
 
 def select_baseline(msr):
     ''' Demonstrate methods of selecting baselines and antennas.
@@ -141,42 +150,49 @@ def select_baseline(msr):
     msr.select_ms(baseline='DV05_A082 & DV18_A053')
     msr.plot(x_axis='frequency') # default is 'baseline'
     msr.show()
+    msr.save()
 
     # Select list of baselines for baseline axis
     msr.clear_selection()
     msr.select_ms(baseline=['DA44_A068 & DA45_A070', 'DV05_A082 & DV18_A053', 'DV08_A021 & DV16_A069', 'DV20_A020 & DV23_A007'])
     msr.plot()
     msr.show()
+    msr.save()
 
     # Select antenna1 value for baseline axis
     msr.clear_selection()
     msr.select_ms(antenna1='DA44_A068')
     msr.plot()
     msr.show()
+    msr.save()
 
     # Select antenna1 list for baseline axis
     msr.clear_selection()
     msr.select_ms(antenna1=['DA44_A068', 'DA45_A070'])
     msr.plot()
     msr.show()
+    msr.save()
 
     # Select antenna2 value for baseline axis
     msr.clear_selection()
     msr.select_ms(antenna2='DA46_A067')
     msr.plot()
     msr.show()
+    msr.save()
 
     # Select antenna2 list for baseline axis
     msr.clear_selection()
     msr.select_ms(antenna2=['DA46_A067', 'DA48_A046'])
     msr.plot()
     msr.show()
+    msr.save()
 
     # Select baseline, antenna1, antenna2 values for baseline axis
     msr.clear_selection()
     msr.select_ms(baseline='DV05_A082 & DV18_A053', antenna1='DA48_A046', antenna2='DA46_A067')
     msr.plot()
     msr.show()
+    msr.save()
 
 def select_frequency(msr):
     ''' Demonstrate methods of selecting frequency. Use get_dimension_values('frequency') options.
@@ -188,30 +204,35 @@ def select_frequency(msr):
     msr.select_ms(frequency=372640508300.9812)
     msr.plot()
     msr.show()
+    msr.save()
 
     # Select single frequency value nearest 372.534 GHz
     msr.clear_selection()
     msr.select_ms(frequency=3.72534e+11, method='nearest')
     msr.plot()
     msr.show()
+    msr.save()
 
     # Select list of frequency values for frequency axis
     msr.clear_selection()
     msr.select_ms(frequency=[3.72534e+11, 3.72622e+11, 3.72693e+11], method='nearest')
     msr.plot(x_axis='frequency')
     msr.show()
+    msr.save()
 
     # Select nearest frequency value within 100 MHz of 372.6 GHz
     msr.clear_selection()
     msr.select_ms(frequency=3.726e+11, method='nearest', tolerance=1e+8)
     msr.plot()
     msr.show()
+    msr.save()
 
     # Select frequency values between 372.6 - 372.7 GHz; method and tolerance not used for slice
     msr.clear_selection()
     msr.select_ms(frequency=slice(3.726e+11, 3.727e+11))
     msr.plot(x_axis='frequency')
     msr.show()
+    msr.save()
 
 def select_polarization(msr):
     ''' Demonstrate methods of selecting polarization. Use get_dimension_values('polarization') options.
@@ -223,12 +244,14 @@ def select_polarization(msr):
     msr.select_ms(polarization='YY')
     msr.plot()
     msr.show()
+    msr.save()
 
     # Select list of polarization values for x-axis
     msr.clear_selection()
     msr.select_ms(polarization=['XX', 'YY'])
     msr.plot(x_axis='polarization')
     msr.show()
+    msr.save()
 
 if __name__ == '__main__':
     plot_ms_selection()

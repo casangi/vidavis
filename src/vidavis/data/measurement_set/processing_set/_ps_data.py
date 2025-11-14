@@ -51,23 +51,28 @@ class PsData:
             print(ps_summary)
         elif columns == "by_ms":
             for row in ps_summary.itertuples(index=False):
-                print(f"MSv4 name: {row[0]}")
-                print(f"intent: {row[1]}")
+                print(f"name: {row[0]}")
+                print(f"scan_intents: {row[1]}")
                 shape = row[2]
                 print(f"shape: {shape[0]} times, {shape[1]} baselines, {shape[2]} channels, {shape[3]} polarizations")
-                print(f"polarization: {row[3]}")
-                scans = [str(scan) for scan in row[4]]
+                print(f"execution_block_UID: {row[3]}")
+                print(f"polarization: {row[4]}")
+                scans = [str(scan) for scan in row[5]]
                 print(f"scan_name: {scans}")
-                print(f"spw_name: {row[5]}")
-                fields = [str(field) for field in row[6]]
+                print(f"spw_name: {row[6]}")
+                print(f"spw_intents: {row[7]}")
+                fields = [str(field) for field in row[8]]
                 print(f"field_name: {fields}")
-                sources = [str(source) for source in row[7]]
+                sources = [str(source) for source in row[9]]
                 print(f"source_name: {sources}")
-                lines = [str(line) for line in row[8]]
+                lines = [str(line) for line in row[10]]
                 print(f"line_name: {lines}")
-                field_coords = row[9]
+                field_coords = row[11]
                 print(f"field_coords: ({field_coords[0]}) {field_coords[1]} {field_coords[2]}")
-                print(f"frequency range: {row[10]:e} - {row[11]:e}")
+                print(f"session_reference_UID: {row[12]}")
+                print(f"scheduling_block_UID: {row[13]}")
+                print(f"project_UID: {row[14]}")
+                print(f"frequency range: {row[15]:e} - {row[16]:e}")
                 print("-----")
         else:
             if isinstance(columns, str):

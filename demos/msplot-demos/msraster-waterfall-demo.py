@@ -55,7 +55,7 @@ def plot_ms_waterfall():
 
     # ProcessingSet selection using summary column name and value
     # For selection options: msr.summary()
-    msr.select_ps(intents='OBSERVE_TARGET#ON_SOURCE')
+    msr.select_ps(scan_intents='OBSERVE_TARGET#ON_SOURCE')
     # For antenna selection options: msr.get_dimension_values('antenna1') or 'antenna2' or 'baseline'
     msr.select_ms(antenna1='DA48_A046')
 
