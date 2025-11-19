@@ -10,7 +10,7 @@ WEIGHT_AXIS_OPTIONS = ['weight', 'sigma']
 # GUI label to selection keyword
 PS_SELECTION_OPTIONS = {
     'MSv4 Name': 'name',
-    'Intents': 'intents',
+    'Scan Intents': 'scan_intents',
     'Scan Name': 'scan_name',
     'Spectral Window Name': 'spw_name',
     'Field Name': 'field_name',

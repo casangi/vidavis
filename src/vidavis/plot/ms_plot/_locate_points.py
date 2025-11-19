@@ -41,9 +41,9 @@ def update_cursor_location(cursor, plot_axes, xds, cursor_locate_box):
     ''' Show data values for cursor x,y position in cursor location box (pn.WidgetBox) '''
     # Convert plot values to selection values to select plot data
     cursor_locate_box.clear()
-
     x, y = cursor
     x_axis, y_axis, vis_axis = plot_axes
+
     cursor_position = {x_axis: x, y_axis: y}
     cursor_location = _locate_point(xds, cursor_position, vis_axis)
 
@@ -54,29 +54,32 @@ def update_cursor_location(cursor, plot_axes, xds, cursor_locate_box):
     # Add location column to widget box
     cursor_locate_box.append(location_column)
 
-def update_points_location(data, plot_axes, xds, points_tab_column, logger):
+def update_points_location(data, plot_axes, xds, points_tab_feed):
     ''' Show data values for points in point_draw in tab and log '''
-    points_tab_column.clear()
+    points_tab_feed.clear()
+    locate_log = []
     if data:
         x_axis, y_axis, vis_axis = plot_axes
-        logger.info("Locate selected points:")
-
+        message = f"Locate {len(data['x'])} points:"
+        locate_log.append(message)
         for point in list(zip(data['x'], data['y'])):
             # Locate point
             point_position = {x_axis: point[0], y_axis: point[1]}
             point_location = _locate_point(xds, point_position, vis_axis)
             # Format location and add to points locate column
             location_layout = _layout_point_location(point_location)
-            points_tab_column.append(location_layout)
-            points_tab_column.append(pn.layout.Divider())
+            points_tab_feed.append(location_layout)
+            points_tab_feed.append(pn.layout.Divider())
 
             # Format and add to log
             location_list = [f"{static_text.name}={static_text.value}" for static_text in point_location]
-            logger.info(", ".join(location_list))
+            locate_log.append(", ".join(location_list))
+    return locate_log
 
-def update_box_location(bounds, plot_axes, xds, box_tab_column, logger):
+def update_box_location(bounds, plot_axes, xds, box_tab_feed):
     ''' Show data values for points in box_select in tab and log '''
-    box_tab_column.clear()
+    box_tab_feed.clear()
+    locate_log = []
     if bounds:
         x_axis, y_axis, vis_axis = plot_axes
         box_bounds = {x_axis: (bounds[0], bounds[2]), y_axis: (bounds[1], bounds[3])}
@@ -84,18 +87,19 @@ def update_box_location(bounds, plot_axes, xds, box_tab_column, logger):
 
         message = f"Locate {npoints} points"
         message += " (only first 100 shown):" if npoints > 100 else ":"
-        logger.info(message)
-        box_tab_column.append(pn.pane.Str(message))
+        locate_log.append(message)
+        box_tab_feed.append(pn.pane.Str(message))
 
         for point in point_locations:
             # Format and add to box locate column
             location_layout = _layout_point_location(point)
-            box_tab_column.append(location_layout)
-            box_tab_column.append(pn.layout.Divider())
+            box_tab_feed.append(location_layout)
+            box_tab_feed.append(pn.layout.Divider())
 
             # Format and add to log
             location_list = [f"{static_text.name}={static_text.value}" for static_text in point]
-            logger.info(", ".join(location_list))
+            locate_log.append(", ".join(location_list))
+    return locate_log
 
 def _locate_point(xds, position, vis_axis):
     '''

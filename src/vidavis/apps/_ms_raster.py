@@ -518,9 +518,9 @@ class MsRaster(MsPlot):
     def _locate_gui_points(self, x, y, data, bounds):
         ''' Callback for locate streams '''
         if self._gui_plot_data:
-            super()._locate_cursor(x, y, self._gui_plot_data, self._gui_panel[0])
-            super()._locate_points(data, self._gui_plot_data, self._gui_panel[0])
-            super()._locate_box(bounds, self._gui_plot_data, self._gui_panel[0])
+            super()._locate_cursor(x, y, self._gui_plot_data, self._gui_panel[0][0][1])
+            super()._locate_points(data, self._gui_plot_data, self._gui_panel[2])
+            super()._locate_box(bounds, self._gui_plot_data, self._gui_panel[3])
         return self._last_gui_plot
 
     def _do_gui_selection(self):
@@ -551,6 +551,10 @@ class MsRaster(MsPlot):
 
                 # Make single Overlay raster plot for DynamicMap
                 gui_plot = self._do_plot(True)
+                gui_plot = gui_plot.opts(
+                    hv.opts.QuadMesh(**self._locate_plot_options),
+                    hv.opts.Scatter(**self._locate_plot_options)
+                )
 
                 # Update color limits in gui with data range
                 plot_params = self._raster_plot.get_plot_params()
@@ -598,7 +602,7 @@ class MsRaster(MsPlot):
         if not self._gui_panel:
             return None
 
-        selectors = self._gui_panel[2][1]
+        selectors = self._gui_panel[0][2][1]
         if name == "selectors":
             return selectors
 
@@ -749,19 +753,19 @@ class MsRaster(MsPlot):
         ''' Callback to start spinner when Plot button clicked. '''
         if self._gui_panel:
             # Start spinner
-            spinner = self._gui_panel[2][2][1]
+            spinner = self._gui_panel[0][2][2][1]
             spinner.value = plot_clicked
 
     def _update_plot_status(self, plot_changed):
         ''' Change button color when plot inputs change. '''
         if self._gui_panel:
             # Set button color
-            button = self._gui_panel[2][2][0]
+            button = self._gui_panel[0][2][2][0]
             button.button_style = 'solid' if plot_changed else 'outline'
 
     def _show_plot_inputs(self):
         ''' Show inputs for raster plot in column in GUI tab '''
-        inputs_column = self._gui_panel[0][1]
+        inputs_column = self._gui_panel[1]
         super()._fill_inputs_column(inputs_column)
 
     ###

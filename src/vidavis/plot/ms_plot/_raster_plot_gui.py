@@ -21,29 +21,26 @@ def create_raster_gui(callbacks, plot_info, empty_plot):
     # Dynamic map for plot, with callback when inputs change or location needed
     #dmap, points = get_plot_dmap(callbacks, selectors, init_plot)
 
-    return pn.Row(
-        pn.Tabs(             # Row [0]
-            ('Plot',                                 # Tabs[0]
-                pn.Column(
-                    pn.pane.HoloViews(empty_plot), # [0] plot
-                    pn.WidgetBox(),                # [1] cursor location
-                )
+    return pn.Tabs(
+        ('Plot',  pn.Row(                                                  # Tabs[0]
+            pn.Column( # Row[0]
+                pn.pane.HoloViews(empty_plot), # Column[0] plot
+                pn.WidgetBox(),                # Column[1] cursor location
             ),
-            ('Plot Inputs', pn.Column()),            # Tabs[1]
-            ('Locate Selected Points', pn.Column()), # Tabs[2]
-            ('Locate Selected Box', pn.Column()),    # Tabs[3]
-            sizing_mode='stretch_width',
-        ),
-        pn.Spacer(width=10), # Row [1]
-        pn.Column(  # Row [2]
-            pn.Spacer(height=25), # Column[0]
-            selectors,            # Column[1]
-            init_plot,            # Column[2]
-            width_policy='min',
-            width=400,
-            sizing_mode='stretch_height',
-        ),
-        sizing_mode='stretch_height',
+            pn.Spacer(width=10), # Row[1]
+            pn.Column(           # Row[2]
+                pn.Spacer(height=25), # Column[0]
+                selectors,            # Column[1] selectors
+                init_plot,            # Column[2] plot button and spinner
+                width_policy='min',
+                width=300,
+                sizing_mode='stretch_height',
+            ),
+        )),
+        ('Plot Inputs', pn.Column()),                                      # Tabs[1]
+        ('Locate Selected Points', pn.Feed(sizing_mode='stretch_height')), # Tabs[2]
+        ('Locate Selected Box', pn.Feed(sizing_mode='stretch_height')),    # Tabs[3]
+        sizing_mode='stretch_width',
     )
 
 def get_plot_input_selectors(callbacks, plot_info):
