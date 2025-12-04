@@ -688,7 +688,7 @@ class MsRaster(MsPlot):
                 selection_key = MS_SELECTION_OPTIONS[selector.name] if selector.name in MS_SELECTION_OPTIONS else None
                 if selection_key:
                     if selection_key == 'data_group':
-                        selector.options = list(super().data_groups())
+                        selector.options = list(super().data_groups(False))
                     else:
                         selector.options = super().get_dimension_values(selection_key)
 

@@ -4,7 +4,7 @@ Overview
 
 .. currentmodule:: applications
 
-The data for the ``vidavis`` applications must be in the MeasurementSet v4.0.0
+The data for the ``vidavis`` applications must be in the MeasurementSet v4
 zarr format, or MeasurementSet v2 format which will be automatically converted
 to MeasurementSet v4 if the necessary packages are installed.
 

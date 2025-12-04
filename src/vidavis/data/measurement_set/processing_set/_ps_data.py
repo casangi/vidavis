@@ -85,11 +85,12 @@ class PsData:
         return self._ps_xdt.xr_ps.summary(data_group)
 
     def get_data_groups(self):
-        ''' Returns set of data group names in Processing Set data. '''
-        data_groups = []
+        ''' Returns dict of data groups in Processing Set data. '''
+        data_groups = {}
         for ms_xdt_name in self._ps_xdt:
-            data_groups.extend(list(self._ps_xdt[ms_xdt_name].data_groups))
-        return set(data_groups)
+            for group_name, group_members in self._ps_xdt[ms_xdt_name].data_groups.items():
+                data_groups[group_name] = group_members
+        return data_groups
 
     def plot_antennas(self, label_antennas=False):
         ''' Plot antenna positions.

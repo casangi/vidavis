@@ -107,10 +107,17 @@ class MsPlot:
         else:
             self._logger.error("Error: MS path has not been set")
 
-    def data_groups(self):
-        ''' Returns set of data groups from all ProcessingSet ms_xds. '''
+    def data_groups(self, show=False):
+        ''' Get data groups from all ProcessingSet ms_xds and either print or return them. '''
         if self._ms_data:
-            return self._ms_data.data_groups()
+            ms_data_groups = self._ms_data.data_groups()
+            if show:
+                for name, items in ms_data_groups.items():
+                    print(name, ":")
+                    for item, val in items.items():
+                        print(f"    {item} = {val}")
+                return None
+            return ms_data_groups
         self._logger.error("Error: MS path has not been set")
         return None
 

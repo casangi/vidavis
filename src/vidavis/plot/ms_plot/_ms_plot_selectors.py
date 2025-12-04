@@ -335,7 +335,7 @@ def _add_multi_choice(ps_selection, names):
     for name in names:
         # For value or list
         ps_selection.append(
-            pn.widgets.MultiSelect(
+            pn.widgets.MultiChoice(
                 name=name,
                 sizing_mode='stretch_width',
             )
