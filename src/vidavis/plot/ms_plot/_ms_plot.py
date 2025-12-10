@@ -4,6 +4,7 @@ Base class for ms plots
 
 import os
 import logging
+import threading
 import time
 
 from bokeh.io import export_png, export_svg
@@ -223,8 +224,14 @@ class MsPlot:
             # return value for locate callback
             self._last_plot = plot
 
-        # Show panel layout
-        self._show_panel.show(title=self._app_name, threaded=True)
+        # Start Panel server in a background daemon thread so it doesn't block process exit.
+        # Note: The Panel server will automatically stop when the Python process exits.
+        # Any open browser windows or tabs displaying the plot will lose connection at that point.
+        server_thread = threading.Thread(
+            target=lambda panel=self._show_panel, name=self._app_name: panel.show(title=name, threaded=False),
+            daemon=True
+        )
+        server_thread.start()
 
     def save(self, filename='ms_plot.png', fmt='auto', width=900, height=600):
         '''
