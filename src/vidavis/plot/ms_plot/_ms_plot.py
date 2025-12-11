@@ -75,7 +75,7 @@ class MsPlot:
         self._last_points = None
         self._last_box = None
         self._locate_plot_options = {
-            'tools': ['hover', 'box_select'],
+            'tools': ['box_select', 'hover'],
             'selection_fill_alpha': 0.2,    # dim selected areas of plot
             'nonselection_fill_alpha': 1.0, # do not dim unselected areas of plot
         }
@@ -160,16 +160,6 @@ class MsPlot:
             self._gui_panel[2].clear() # locate points
             self._gui_panel[3].clear() # locate box
 
-    def unlink_plot_locate(self):
-        ''' Disconnect streams when plot data is going to be replaced '''
-        if self._show_panel and len(self._show_panel.objects) == 4:
-            # Remove dmap (streams with callback) from previous plot
-            self._show_panel[0][0] = self._last_plot.opts(tools=['hover'])
-            # Remove locate widgets
-            self._show_panel[0].pop(1) # cursor locate box
-            self._show_panel.pop(3)    # box locate tab
-            self._show_panel.pop(2)    # points locate tab
-
     def clear_selection(self):
         ''' Clear data selection and restore original ProcessingSet '''
         if self._ms_data:
@@ -209,17 +199,19 @@ class MsPlot:
             # Create panel layout
             self._show_panel = pn.Tabs(
                 ('Plot',
-                    pn.Column(
+                    pn.Row(
                         plot * dmap,
                         pn.WidgetBox(), # cursor info
                     )
                 ),
-                sizing_mode='stretch_width',
+                sizing_mode='stretch_both',
             )
+
+            # Add tabs for inputs and locate
             if inputs_column:
                 self._show_panel.append(('Plot Inputs', inputs_column))
-            self._show_panel.append(('Locate Selected Points', pn.Feed(sizing_mode='stretch_height')))
-            self._show_panel.append(('Locate Selected Box', pn.Feed(sizing_mode='stretch_height')))
+            self._show_panel.append(('Locate Selected Points', pn.Feed(height_policy='max')))
+            self._show_panel.append(('Locate Selected Box', pn.Feed(height_policy='max')))
 
             # return value for locate callback
             self._last_plot = plot
@@ -420,6 +412,16 @@ class MsPlot:
             ]
         )
         return dmap * points
+
+    def _unlink_plot_locate(self):
+        ''' Disconnect streams when plot data is going to be replaced '''
+        if self._show_panel and len(self._show_panel.objects) == 4:
+            # Remove dmap (streams with callback) from previous plot
+            self._show_panel[0][0] = self._last_plot.opts(tools=['hover'])
+            # Remove locate widgets
+            self._show_panel[0].pop(1) # cursor locate box
+            self._show_panel.pop(3)    # box locate tab
+            self._show_panel.pop(2)    # points locate tab
 
     def _get_plot_axes(self):
         ''' Return x, y, vis axes '''

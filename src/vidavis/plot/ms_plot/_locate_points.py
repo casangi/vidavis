@@ -47,9 +47,9 @@ def update_cursor_location(cursor, plot_axes, xds, cursor_locate_box):
     cursor_position = {x_axis: x, y_axis: y}
     cursor_location = _locate_point(xds, cursor_position, vis_axis)
 
-    location_column = pn.Column(pn.widgets.StaticText(name="Cursor Location"))
+    location_column = pn.Column(pn.widgets.StaticText(name="CURSOR LOCATION"))
     # Add row of columns to column layout
-    location_row = _layout_point_location(cursor_location)
+    location_row = _layout_point_location(cursor_location, True)
     location_column.append(location_row)
     # Add location column to widget box
     cursor_locate_box.append(location_column)
@@ -252,19 +252,23 @@ def _get_location_text(name, value, units):
     unit = units[name] if name in units else ""
     return pn.widgets.StaticText(name=name, value=f"{value} {unit}")
 
-def _layout_point_location(text_list):
+def _layout_point_location(text_list, is_cursor=False):
     ''' Layout list of StaticText in row of columns containing 3 rows '''
     location_row = pn.Row()
     location_col = pn.Column()
 
-    for static_text in text_list:
-        # 3 entries per column; append to row and start new column
-        if len(location_col.objects) == 3:
-            location_row.append(location_col)
-            location_col = pn.Column()
+    if is_cursor:
+        for static_text in text_list:
+            location_col.append(static_text)
+    else:
+        for static_text in text_list:
+            # 3 entries per column; append to row and start new column
+            if len(location_col.objects) == 3:
+                location_row.append(location_col)
+                location_col = pn.Column()
 
-        static_text.margin = (0, 5) # default (5, 10)
-        location_col.append(static_text)
+            static_text.margin = (0, 5) # default (5, 10)
+            location_col.append(static_text)
 
     # Add last column
     location_row.append(location_col)

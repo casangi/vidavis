@@ -592,19 +592,17 @@ below it are the *pan*, *box zoom*, *box select*, *wheel zoom*, *point draw*,
 *save*, *reset*, and *hover* tool icons. By default, the pan, wheel zoom, and
 hover tools are activated for the plot, indicated by the line to the left of the
 icons. Bokeh plot tools can be enabled or disabled by clicking on the tool icon.
-For example, to see the flagged hover values (top hover icon), disable the
-unflagged hover tool (bottom hover icon).
 
 In addition to the hover information, when the cursor moves over the plot, a
-Cursor Location box appears under the plot to show the coordinates and data
-variables associated with the cursor position.
+Cursor Location box appears to the right of the plot to show the coordinates and
+data variables associated with the cursor position.
 
 The plot is shown with four tabs at the upper left.  The first tab (**Plot**),
 which is active by default, contains the plot and the cursor location box. The
 second tab (**Plot Inputs**) shows the parameters used to make the raster
 plot (including automatic selections), sorted alphabetically:
 
-.. image:: _static/show_plot_inputs.png
+.. image:: _static/msraster_plot_inputs.png
    :width: 75%
 
 The remaining tabs are for selecting areas of the plot to show the location of
@@ -615,7 +613,7 @@ the points. See :ref:`locate_data` for a detailed description.
    The Locate features are disabled in a plot when a new plot is created with
    ``plot()``, since the plot data needed for the metadata is no longer
    available. The cursor box and locate tabs are removed, but the hover tool is
-   still active.
+   still active. The new plot is shown in a new tab with locate features.
 
 If multiple plots were created (with **iter_axis**, or **clear_plots** set to
 False) in a **subplots** layout, the plots are connected so that the Bokeh plot
@@ -642,7 +640,8 @@ box selected with the **Box Select** tool.
 **Cursor:**
 
 When the cursor is positioned over the plot, the hover values are shown in the
-plot as well as additional Cursor Location information shown below the plot:
+plot as well as additional Cursor Location information shown to the right of the
+plot:
 
 .. image:: _static/msraster_cursor.png
 
@@ -666,18 +665,19 @@ The location information for each selected point is displayed in the Locate tabs
 and in the log file. Points selected individually with **Point Draw** will
 appear in the third tab (**Locate Selected Points**), and points selected in a
 box with **Box Select** will appear in the fourth tab (**Locate Selected Box**).
-In the following plot, two points and one box are selected at the bottom center
-of the plot, and the **Point Draw** tool is activated:
+Only one selection tool can be activated at a time. In the following plot,
+several unflagged points and a box of flagged points are
+selected in the plot, and the **Point Draw** tool is activated:
 
-.. image:: _static/locate_points.png
+.. image:: _static/msraster_locate_points.png
 
-The location information and format for each point is identical to the Cursor
-Location described above. For example, in the **Locate Selected Box** tab, the
+The location information shows the coordinate and data variable information
+associated with each point. For example, in the **Locate Selected Box** tab, the
 number of points in the box is shown, then the points are listed with a divider
 between them. Only the **first 100** points in the selected box are located,
 starting with the first row of the box:
 
-.. image:: _static/locate_selected_box.png
+.. image:: _static/msraster_locate_box.png
 
 .. warning::
    Although multiple boxes may be selected by pressing the SHIFT key, the list
@@ -767,13 +767,20 @@ zoom, and hover tools are activated:
 
 .. image:: _static/msraster_gui.png
 
-**Plot Inputs:**
+**Plot Settings:**
 
-The plot input widgets on the right side of the GUI allow the user to set all of
-the parameters in the MsRaster functions ``set_style_params``, ``select_ps``,
-``select_ms``, and ``plot``, described above:
+When using the interactive GUI, settings for the plot may be changed in the
+**Plot Settings** tab. This allows the user to set all of the parameters in the
+MsRaster functions ``set_style_params``, ``select_ps``, ``select_ms``, and
+``plot``, described above:
 
-.. image:: _static/msraster_gui_inputs.png
+.. image:: _static/msraster_plot_settings.png
+
+In this accordion-style panel, each section may be expanded to access its
+settings. The **Plot** button below the panel will change from outline to solid
+when the settings change. Click **Plot** to create the plot. The spinner to the
+right of the button will rotate until the plot is complete and shown in the
+**Plot** tab, with the updated plot inputs in the **Plot Inputs** tab.
 
 * :ref:`construct_msraster` parameters:
 
@@ -797,9 +804,6 @@ the parameters in the MsRaster functions ``set_style_params``, ``select_ps``,
   * **Aggregation**: ``aggregator``, ``agg_axis``
   * **Iteration**: ``iter_axis``, ``iter_range``, ``subplots``
   * **Plot title**: ``title``
-
-The **Plot** button below the plot inputs widgets will change from outline to
-solid when the inputs change. Click **Plot** to render the plot.
 
 .. note::
    Currently, the only way to create multiple plots in a layout is iteration.

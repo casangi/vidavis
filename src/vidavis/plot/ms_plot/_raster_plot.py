@@ -185,7 +185,6 @@ class RasterPlot:
         x_formatter = get_time_formatter() if x_axis == 'time' else None
         y_formatter = get_time_formatter() if y_axis == 'time' else None
 
-        # Hide flagged colorbar if unflagged colorbar is shown
         if xda.count().values > 0:
             if is_flagged:
                 show_colorbar = style_params['show_flagged_colorbar']
@@ -240,7 +239,6 @@ class RasterPlot:
                 yticks=plot_params['axis_labels']['y']['ticks'],
                 rot=45,
                 marker='s', # square
-                hover=True,
                 responsive=True,
             )
 

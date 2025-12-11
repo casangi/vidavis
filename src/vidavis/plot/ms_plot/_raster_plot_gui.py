@@ -8,7 +8,7 @@ from vidavis.plot.ms_plot._ms_plot_selectors import (file_selector, title_select
 
 def create_raster_gui(callbacks, plot_info, empty_plot):
     ''' Use Holoviz Panel to create a dashboard for plot inputs and raster plot display.
-        ms (str): path to MS, if set
+        callbacks (dist): callback functions for widgets
         plot_info (dict): with keys 'ms', 'data_dims', 'x_axis', 'y_axis'
         empty_plot (hv.Overlay): QuadMesh overlay plot with no data
     '''
@@ -22,24 +22,19 @@ def create_raster_gui(callbacks, plot_info, empty_plot):
     #dmap, points = get_plot_dmap(callbacks, selectors, init_plot)
 
     return pn.Tabs(
-        ('Plot',  pn.Row(                                                  # Tabs[0]
-            pn.Column( # Row[0]
-                pn.pane.HoloViews(empty_plot), # Column[0] plot
-                pn.WidgetBox(),                # Column[1] cursor location
-            ),
-            pn.Spacer(width=10), # Row[1]
-            pn.Column(           # Row[2]
-                pn.Spacer(height=25), # Column[0]
-                selectors,            # Column[1] selectors
-                init_plot,            # Column[2] plot button and spinner
-                width_policy='min',
-                width=300,
-                sizing_mode='stretch_height',
-            ),
+        ('Plot', pn.Row(                                                   # Tabs[0]
+            pn.pane.HoloViews(empty_plot), # Row[0] plot
+            pn.WidgetBox(),                # Row[1] cursor location
         )),
         ('Plot Inputs', pn.Column()),                                      # Tabs[1]
         ('Locate Selected Points', pn.Feed(sizing_mode='stretch_height')), # Tabs[2]
         ('Locate Selected Box', pn.Feed(sizing_mode='stretch_height')),    # Tabs[3]
+        ('Plot Settings', pn.Column(                                       # Tabs[4]
+            pn.Spacer(height=25), # Column[0]
+            selectors,            # Column[1] selectors
+            init_plot,            # Column[2] plot button and spinner
+            sizing_mode='stretch_both',
+        )),
         sizing_mode='stretch_width',
     )
 
@@ -79,6 +74,7 @@ def get_plot_input_selectors(callbacks, plot_info):
         ("Aggregation", agg_selectors),          # [4]
         ("Iteration", iter_selectors),           # [5]
         ("Plot title", title_input),             # [6]
+        sizing_mode='stretch_width',
     )
     selectors.toggle = True
     return selectors
