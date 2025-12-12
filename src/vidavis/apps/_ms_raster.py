@@ -2,6 +2,7 @@
 Implementation of the ``MsRaster`` application for measurement set raster plotting and editing
 '''
 
+import threading
 import time
 
 from bokeh.models.formatters import NumeralTickFormatter
@@ -450,7 +451,15 @@ class MsRaster(MsPlot):
         }
 
         self._gui_panel = create_raster_gui(callbacks, plot_info, self._empty_plot)
-        self._gui_panel.show(title=self._app_name, threaded=True)
+
+        # Start Panel server in a background daemon thread so it doesn't block process exit.
+        # Note: The Panel server will automatically stop when the Python process exits.
+        # Any open browser windows or tabs displaying the plot will lose connection at that point.
+        server_thread = threading.Thread(
+            target=lambda panel=self._gui_panel, name=self._app_name: panel.show(title=name, threaded=False),
+            daemon=True
+        )
+        server_thread.start()
 
     ###
     ### Main callback to create plot if inputs changed
