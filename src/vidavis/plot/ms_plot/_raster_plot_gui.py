@@ -22,9 +22,9 @@ def create_raster_gui(callbacks, plot_info, empty_plot):
     #dmap, points = get_plot_dmap(callbacks, selectors, init_plot)
 
     return pn.Tabs(
-        ('Plot', pn.Row(                                                   # Tabs[0]
-            pn.pane.HoloViews(empty_plot), # Row[0] plot
-            pn.WidgetBox(),                # Row[1] cursor location
+        ('Plot', pn.Column(                                                   # Tabs[0]
+            pn.pane.HoloViews(empty_plot),             # Row[0] plot
+            pn.WidgetBox(sizing_mode='stretch_width'), # Row[1] cursor location
         )),
         ('Plot Inputs', pn.Column()),                                      # Tabs[1]
         ('Locate Selected Points', pn.Feed(sizing_mode='stretch_height')), # Tabs[2]

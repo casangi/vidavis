@@ -199,9 +199,9 @@ class MsPlot:
             # Create panel layout
             self._show_panel = pn.Tabs(
                 ('Plot',
-                    pn.Row(
+                    pn.Column(
                         plot * dmap,
-                        pn.WidgetBox(), # cursor info
+                        pn.WidgetBox(sizing_mode='stretch_width'), # cursor info
                     )
                 ),
                 sizing_mode='stretch_both',
