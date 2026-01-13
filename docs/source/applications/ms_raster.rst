@@ -594,8 +594,8 @@ hover tools are activated for the plot, indicated by the line to the left of the
 icons. Bokeh plot tools can be enabled or disabled by clicking on the tool icon.
 
 In addition to the hover information, when the cursor moves over the plot, a
-Cursor Location box appears to the right of the plot to show the coordinates and
-data variables associated with the cursor position.
+**Cursor Location** box appears under the plot to show the coordinates and data
+variables associated with the cursor position.
 
 The plot is shown with four tabs at the upper left.  The first tab (**Plot**),
 which is active by default, contains the plot and the cursor location box. The
@@ -605,21 +605,21 @@ plot (including automatic selections), sorted alphabetically:
 .. image:: _static/msraster_plot_inputs.png
    :width: 75%
 
-The remaining tabs are for selecting areas of the plot to show the location of
-the points. See :ref:`locate_data` for a detailed description.
+The remaining tabs are for showing the location of points selected in the plot
+by point or box. See :ref:`locate_data` for a detailed description.
 
 .. note::
 
    The Locate features are disabled in a plot when a new plot is created with
    ``plot()``, since the plot data needed for the metadata is no longer
    available. The cursor box and locate tabs are removed, but the hover tool is
-   still active. The new plot is shown in a new tab with locate features.
+   still active. The new plot is shown in a new tab with Locate features.
 
 If multiple plots were created (with **iter_axis**, or **clear_plots** set to
 False) in a **subplots** layout, the plots are connected so that the Bokeh plot
 tools such as pan and zoom act on all plots in the layout.  The following layout
-plot demonstrates the same zoom level, with the shared toolbar at the upper
-right:
+of a dataset iterated by baseline demonstrates the same zoom level in all plots,
+with the shared toolbar at the upper right:
 
 .. image:: _static/msraster_layout_zoom.png
 
@@ -633,57 +633,70 @@ right:
 Locate Plot Data
 ````````````````
 
-Location information for selected points can be obtained for the **cursor**
-position, for points selected using the **Point Draw** tool, or for points in a
-box selected with the **Box Select** tool.
+Location information for points in a plot can be obtained by selecting points
+and viewing the Locate tabs or the log file. Only one selection tool can be
+active; selection tools include **Pan**, **Box Zoom**, **Box Select**, and
+**Point Draw**. Activating a new selection tool will deactivate the previous
+selection tool.
+
+Points for location can be selected using the current **cursor** position,
+drawing points using the **Point Draw** tool, or selecting a box with the **Box
+Select** tool.
 
 **Cursor:**
 
 When the cursor is positioned over the plot, the hover values are shown in the
-plot as well as additional Cursor Location information shown to the right of the
-plot:
+plot as well as additional Cursor Location information shown under the plot.
 
 .. image:: _static/msraster_cursor.png
 
 **Select Points:**
 
-Any number of points may be selected, moved, or changed by activating the
-**Point Draw** tool. To select a point, tap anywhere on the plot. To move a
+Any number of points may be drawn, moved, or deleted by activating the
+**Point Draw** tool. To draw a point, tap anywhere on the plot. To move a
 point, tap and drag the point to the desired position. To delete a point, tap
-the point to select it then press BACKSPACE or DELETE.
+the point then press BACKSPACE or DELETE. Press SHIFT to select multiple points
+to move or delete. You may need to zoom in to select a point; using the Bokeh
+**Reset** tool on the toolbar to reset the zoom level will not delete the
+points.
 
 **Select Box:**
 
-A box may be selected or deleted by activating the **Box Select** tool. To
-select a box, tap and drag across the plot to draw a rectangle. A new box
-selection will replace the old box. To clear the box selection, press the ESC
-key.
-
-**Locate Selected Points:**
-
-The location information for each selected point is displayed in the Locate tabs
-and in the log file. Points selected individually with **Point Draw** will
-appear in the third tab (**Locate Selected Points**), and points selected in a
-box with **Box Select** will appear in the fourth tab (**Locate Selected Box**).
-Only one selection tool can be activated at a time. In the following plot,
-several unflagged points and a box of flagged points are
-selected in the plot, and the **Point Draw** tool is activated:
-
-.. image:: _static/msraster_locate_points.png
-
-The location information shows the coordinate and data variable information
-associated with each point. For example, in the **Locate Selected Box** tab, the
-number of points in the box is shown, then the points are listed with a divider
-between them. Only the **first 100** points in the selected box are located,
-starting with the first row of the box:
-
-.. image:: _static/msraster_locate_box.png
+A box may be drawn or deleted by activating the **Box Select** tool. To draw a
+box, tap and drag across the plot to draw a rectangle. A new box will replace
+the previous box, unless the SHIFT key is pressed. To clear all selected boxes,
+press the ESC key. Using the Bokeh **Reset** tool on the toolbar will delete all
+boxes.
 
 .. warning::
    Although multiple boxes may be selected by pressing the SHIFT key, the list
-   of points for each box in the Locate Selected Box tab will be cleared with
-   each new box selection rather than appended. However, the points in each box
-   can be accessed in the log file, in the order the boxes are created.
+   of points for each box in the **Locate Box** tab will be cleared with each
+   new box selection rather than appended. However, the points in each box can
+   be accessed in the log file, in the order the boxes are created.
+
+In the following plot, a box and several points (small white circles above the
+box) are selected in the plot, and the **Point Draw** tool is activated:
+
+.. image:: _static/msraster_locate_points.png
+
+**Locate Selected Points:**
+
+The location information for each point or box is displayed in the Locate tabs
+and in the log file. Points drawn individually with **Point Draw** will appear
+in the third tab (**Locate Points**), and points selected in a box with
+**Box Select** will appear in the fourth tab (**Locate Box**).
+
+The location information shows the coordinate and data variable information
+associated with each point. For example, in the **Locate Box** tab, the number
+of points in the box is shown, then the points are listed with a divider between
+them. Only the **first 100** points in the selected box are located, starting
+with the first row of the box.
+
+.. warning::
+   The **Locate Box** tab will remain blank until the location information for
+   the points is obtained and formatted, then the tab is updated.
+
+.. image:: _static/msraster_locate_box.png
 
 .. _save_plot:
 
