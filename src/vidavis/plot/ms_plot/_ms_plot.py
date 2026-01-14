@@ -80,7 +80,6 @@ class MsPlot:
             'selection_fill_alpha': 0.2,    # dim selected areas of plot
             'nonselection_fill_alpha': 1.0, # do not dim unselected areas of plot
         }
-        self._point_stream = None
 
         # Initialize panels for callbacks
         self._gui_panel = None
@@ -414,13 +413,12 @@ class MsPlot:
             size=5,
             fill_color='white'
         )
-        self._point_stream = hv.streams.PointDraw(source=points)
         dmap = hv.DynamicMap(
             callback,
             streams=[
-                hv.streams.PointerXY(), # cursor location (x, y)
-                self._point_stream,     # fixed points location (data)
-                hv.streams.BoundsXY()   # box location (bounds)
+                hv.streams.PointerXY(),              # cursor location (x, y)
+                hv.streams.PointDraw(source=points), # fixed points location (data)
+                hv.streams.BoundsXY()                # box location (bounds)
             ]
         )
         return dmap * points
@@ -475,7 +473,6 @@ class MsPlot:
         y_vals = point_data['y']
         point_data['y'] = [get_locate_value(plot_data, plot_axes[1], y) for y in y_vals]
         data_points = list(zip(point_data['x'], point_data['y']))
-        self._point_stream.data = point_data
 
         if points_changed(data_points, self._last_points):
             # update selected points location tab
