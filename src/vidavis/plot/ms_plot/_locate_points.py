@@ -10,6 +10,23 @@ import panel as pn
 
 from vidavis.plot.ms_plot._ms_plot_constants import TIME_FORMAT
 
+def get_locate_value(xds, coord, value):
+    ''' Convert index coordinates to int and float time coordinate to datetime. Select nearest value <= value. '''
+    if coord in ['baseline', 'antenna_name', 'polarization']:
+        # Convert float to int index value
+        return round(value)
+
+    if coord in ['time', 'frequency']:
+        if coord=='time' and isinstance(value, float):
+            # Convert float to datetime value
+            # Bokeh datetime values are floating point values that represent milliseconds-since-epoch (unix time)
+            value = to_datetime(value, unit='ms')
+        value_sel = {coord: value}
+        nearest_value = xds[coord].sel(indexers=None, method='nearest', tolerance=None, drop=False, **value_sel).values
+        return nearest_value
+
+    return value
+
 def cursor_changed(cursor, last_cursor):
     ''' Check whether cursor position changed '''
     x, y = cursor
@@ -21,8 +38,7 @@ def cursor_changed(cursor, last_cursor):
 
 def points_changed(data, last_points):
     ''' Check whether point positions changed '''
-    # No data = {'x': [], 'y': []}
-    if not data or (len(data['x']) == 0 and len(data['y']) == 0):
+    if not data:
         return False # not points callback
     if last_points and last_points == data:
         return False # same points
@@ -47,25 +63,24 @@ def update_cursor_location(cursor, plot_axes, xds, cursor_locate_box):
     cursor_position = {x_axis: x, y_axis: y}
     cursor_location = _locate_point(xds, cursor_position, vis_axis)
 
-    location_column = pn.Column(pn.widgets.StaticText(name="CURSOR LOCATION"))
     # Add row of columns to column layout
+    location_column = pn.Column(pn.widgets.StaticText(name="CURSOR LOCATION"))
     location_row = _layout_point_location(cursor_location)
     location_column.append(location_row)
+
     # Add location column to widget box
     cursor_locate_box.append(location_column)
 
 def update_points_location(data, plot_axes, xds, points_tab_feed):
     ''' Show data values for points in point_draw in tab and log '''
-    points_tab_feed.clear()
     locate_log = []
     if data:
         x_axis, y_axis, vis_axis = plot_axes
-        message = f"Locate {len(data['x'])} points:"
-        locate_log.append(message)
-        for point in list(zip(data['x'], data['y'])):
+        for point in data:
             # Locate point
             point_position = {x_axis: point[0], y_axis: point[1]}
             point_location = _locate_point(xds, point_position, vis_axis)
+
             # Format location and add to points locate column
             location_layout = _layout_point_location(point_location)
             points_tab_feed.append(location_layout)
@@ -141,8 +156,9 @@ def _locate_box(xds, bounds, vis_axis):
             selection = {}
             for coord, val in bounds.items():
                 # Round index values to int for selection
-                selection[coord] = slice(_get_selection_value(coord, val[0]), _get_selection_value(coord, val[1]))
+                selection[coord] = slice(get_locate_value(xds, coord, val[0]), get_locate_value(xds, coord, val[1]))
             sel_xds = xds.sel(indexers=None, method=None, tolerance=None, drop=False, **selection)
+            sel_xds.compute()
 
             x_coord, y_coord = bounds.keys()
             npoints = sel_xds.sizes[x_coord] * sel_xds.sizes[y_coord]
@@ -175,10 +191,6 @@ def _get_point_location(xds, position, vis_axis):
 
     if xds:
         try:
-            for coord, value in position.items():
-                # Round index coordinates to int and convert time to datetime if float for selection
-                position[coord] = _get_selection_value(coord, value)
-
             sel_xds = xds.sel(indexers=None, method='nearest', tolerance=None, drop=False, **position)
             for coord in sel_xds.coords:
                 if coord == 'uvw_label' or ('baseline_antenna' in coord and 'baseline_name' in sel_xds.coords):
@@ -205,16 +217,6 @@ def _get_point_location(xds, position, vis_axis):
     if 'VISIBILITY' in values:
         values[vis_axis.upper()] = values.pop('VISIBILITY')
     return values, units
-
-def _get_selection_value(coord, value):
-    ''' Convert index coordinates to int and float time coordinate to datetime '''
-    if coord in ['baseline', 'antenna_name', 'polarization']:
-        # Round index coordinates to int for selecction
-        value = round(value)
-    elif coord == 'time' and isinstance(value, float):
-        # Bokeh datetime values are floating-point numbers: milliseconds since the Unix epoch
-        value = to_datetime(value, unit='ms', origin='unix')
-    return value
 
 def _get_xda_val_unit(xda):
     ''' Return value and unit of xda (selected so only one value) '''
