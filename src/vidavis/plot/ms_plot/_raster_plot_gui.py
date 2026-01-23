@@ -26,10 +26,10 @@ def create_raster_gui(callbacks, plot_info, empty_plot):
             pn.pane.HoloViews(empty_plot),             # Row[0] plot
             pn.WidgetBox(sizing_mode='stretch_width'), # Row[1] cursor location
         )),
-        ('Plot Inputs', pn.Column()),                                      # Tabs[1]
-        ('Locate Selected Points', pn.Feed(sizing_mode='stretch_height')), # Tabs[2]
-        ('Locate Selected Box', pn.Feed(sizing_mode='stretch_height')),    # Tabs[3]
-        ('Plot Settings', pn.Column(                                       # Tabs[4]
+        ('Plot Inputs', pn.Column()),                             # Tabs[1]
+        ('Locate Points', pn.Feed(sizing_mode='stretch_height')), # Tabs[2]
+        ('Locate Box', pn.Feed(sizing_mode='stretch_height')),    # Tabs[3]
+        ('Plot Settings', pn.Column(                              # Tabs[4]
             pn.Spacer(height=25), # Column[0]
             selectors,            # Column[1] selectors
             init_plot,            # Column[2] plot button and spinner

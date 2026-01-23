@@ -17,7 +17,7 @@ from selenium import webdriver
 from toolviper.utils.logger import setup_logger
 
 from vidavis.data.measurement_set._ms_data import MsData
-from vidavis.plot.ms_plot._locate_points import cursor_changed, points_changed, box_changed, update_cursor_location, update_points_location, update_box_location
+from vidavis.plot.ms_plot._locate_points import get_locate_value, data_changed, get_new_data, update_cursor_location, update_points_location, update_boxes_location
 from vidavis.toolbox import AppContext
 
 class MsPlot:
@@ -73,9 +73,10 @@ class MsPlot:
         self._plot_axes = None
         self._last_cursor = None
         self._last_points = None
-        self._last_box = None
+        self._last_boxes = None
         self._locate_plot_options = {
-            'tools': ['box_select', 'hover'],
+            'tools': ['hover'],
+            'muted_alpha': 0,
             'selection_fill_alpha': 0.2,    # dim selected areas of plot
             'nonselection_fill_alpha': 1.0, # do not dim unselected areas of plot
         }
@@ -189,10 +190,11 @@ class MsPlot:
             if inputs_column:
                 self._show_panel.append(('Plot Inputs', inputs_column))
         else:
-            plot = plot.opts(
+            plot = plot.options(
                 hv.opts.QuadMesh(**self._locate_plot_options),
-                hv.opts.Scatter(**self._locate_plot_options)
+                hv.opts.Scatter(**self._locate_plot_options),
             )
+
             # Add DynamicMap for streams for single plot
             dmap = self._get_locate_dmap(self._locate)
 
@@ -210,8 +212,11 @@ class MsPlot:
             # Add tabs for inputs and locate
             if inputs_column:
                 self._show_panel.append(('Plot Inputs', inputs_column))
-            self._show_panel.append(('Locate Selected Points', pn.Feed(height_policy='max')))
-            self._show_panel.append(('Locate Selected Box', pn.Feed(height_policy='max')))
+            self._show_panel.append(('Locate Points', pn.Feed(height_policy='max')))
+            self._show_panel.append(('Locate Box', pn.Feed(height_policy='max')))
+
+            # Compute coordinate values for locate
+            self._compute_plot_metadata(self._plot_data)
 
             # return value for locate callback
             self._last_plot = plot
@@ -397,21 +402,28 @@ class MsPlot:
                 str_pane.margin = (0, 10)
                 inputs_tab_column.append(str_pane)
 
+    def _compute_plot_metadata(self, xds):
+        ''' Compute coordinate dask arrays to numpy arrays in memory '''
+        for coord in xds.coords:
+            xds[coord] = xds[coord].compute()
+
     def _get_locate_dmap(self, callback):
         ''' Return DynamicMap with streams callback to locate points '''
         points = hv.Points([]).opts(
             size=5,
             fill_color='white'
         )
+        boxes = hv.Rectangles([])
         dmap = hv.DynamicMap(
             callback,
             streams=[
-                hv.streams.PointerXY(),              # cursor location (x, y)
-                hv.streams.PointDraw(source=points), # fixed points location (data)
-                hv.streams.BoundsXY()                # box location (bounds)
+                hv.streams.PointerXY(),                               # cursor location (x, y)
+                hv.streams.PointDraw(source=points),                  # fixed points location (data)
+                hv.streams.BoxEdit(source=boxes).rename(data='boxes') # box location (boxes)
             ]
         )
-        return dmap * points
+        return (dmap * points * boxes).options(
+            hv.opts.Rectangles(fill_alpha=0.5, line_color='white'))
 
     def _unlink_plot_locate(self):
         ''' Disconnect streams when plot data is going to be replaced '''
@@ -432,45 +444,91 @@ class MsPlot:
             self._plot_axes = (x_axis, y_axis, vis_axis)
         return self._plot_axes
 
-    def _locate(self, x, y, data, bounds):
+    def _locate(self, x, y, data, boxes):
         ''' Callback for all show plot streams '''
+        if self._locate_points(data, self._plot_data, self._show_panel[2]):
+            return self._last_plot
+
+        if self._locate_boxes(boxes, self._plot_data, self._show_panel[3]):
+            return self._last_plot
+
         self._locate_cursor(x, y, self._plot_data, self._show_panel[0][1])
-        self._locate_points(data, self._plot_data, self._show_panel[2])
-        self._locate_box(bounds, self._plot_data, self._show_panel[3])
         return self._last_plot
 
     def _locate_cursor(self, x, y, plot_data, cursor_box):
         ''' Show location from cursor position in cursor locate box '''
+        if not x and not y: # not cursor callback
+            return False
+        plot_axes = self._get_plot_axes()
+        x = get_locate_value(plot_data, plot_axes[0], x)
+        y = get_locate_value(plot_data, plot_axes[1], y)
         cursor = (x, y)
-        if cursor_changed(cursor, self._last_cursor):
+        if data_changed(cursor, self._last_cursor):
             # new cursor position - update cursor location box
-            update_cursor_location(cursor, self._get_plot_axes(), plot_data, cursor_box)
+            update_cursor_location(cursor, plot_axes, plot_data, cursor_box)
             self._last_cursor = cursor
+            return True
+        return False
 
     def _locate_points(self, point_data, plot_data, points_tab):
         ''' Show points locations from point_draw tool '''
-        if points_changed(point_data, self._last_points):
-            # update selected points location tab
-            location_info = update_points_location(point_data, self._get_plot_axes(), plot_data, points_tab)
+        if not point_data or len(point_data['x']) == 0: # not points callback
+            return False
 
-            # log to file only
-            self._logger.removeHandler(self._stdout_handler)
-            for info in location_info:
-                self._logger.info(info)
-            self._logger.addHandler(self._stdout_handler)
+        plot_axes = self._get_plot_axes()
+        x_vals = point_data['x']
+        y_vals = point_data['y']
+        point_data['x'] = [get_locate_value(plot_data, plot_axes[0], x) for x in x_vals]
+        point_data['y'] = [get_locate_value(plot_data, plot_axes[1], y) for y in y_vals]
+        data_points = list(zip(point_data['x'], point_data['y']))
 
-            self._last_points = point_data
+        if not data_changed(data_points, self._last_points):
+            return False
 
-    def _locate_box(self, box_bounds, plot_data, box_tab):
+        # update selected points location tab with new points
+        points_to_locate = get_new_data(data_points, self._last_points)
+        self._last_points = data_points
+
+        if len(points_to_locate) == len(data_points):
+            points_tab.clear() # clear for locating all points
+
+        if points_to_locate:
+            location_info = update_points_location(points_to_locate, self._get_plot_axes(), plot_data, points_tab)
+            self._log_to_file_only(location_info)
+        return True
+
+    def _locate_boxes(self, boxes, plot_data, box_tab):
         ''' Show points locations in box from box_select tool '''
-        if box_changed(box_bounds, self._last_box):
-            # update selected box location tab
-            location_info = update_box_location(box_bounds, self._get_plot_axes(), plot_data, box_tab)
+        if not boxes or len(boxes['x0']) == 0: # not box callback
+            return False
 
-            # log to file only
-            self._logger.removeHandler(self._stdout_handler)
-            for info in location_info:
-                self._logger.info(info)
-            self._logger.addHandler(self._stdout_handler)
+        plot_axes = self._get_plot_axes()
+        x0_vals = boxes['x0']
+        y0_vals = boxes['y0']
+        x1_vals = boxes['x1']
+        y1_vals = boxes['y1']
+        boxes['x0'] = [get_locate_value(plot_data, plot_axes[0], x0) for x0 in x0_vals]
+        boxes['y0'] = [get_locate_value(plot_data, plot_axes[1], y0) for y0 in y0_vals]
+        boxes['x1'] = [get_locate_value(plot_data, plot_axes[0], x1) for x1 in x1_vals]
+        boxes['y1'] = [get_locate_value(plot_data, plot_axes[1], y1) for y1 in y1_vals]
+        box_list = list(zip(boxes['x0'], boxes['y0'], boxes['x1'], boxes['y1']))
 
-            self._last_box = box_bounds
+        if not data_changed(box_list, self._last_boxes):
+            return False
+
+        # update selected box location tab with new boxes
+        boxes_to_locate = get_new_data(box_list, self._last_boxes)
+        self._last_boxes = box_list
+
+        if boxes_to_locate:
+            box_tab.clear()
+            location_info = update_boxes_location(boxes_to_locate, self._get_plot_axes(), plot_data, box_tab)
+            self._log_to_file_only(location_info)
+        return True
+
+    def _log_to_file_only(self, messages):
+        ''' log messages to file only '''
+        self._logger.removeHandler(self._stdout_handler)
+        for message in messages:
+            self._logger.info(message)
+        self._logger.addHandler(self._stdout_handler)

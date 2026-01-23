@@ -521,15 +521,16 @@ class MsRaster(MsPlot):
         # Add plot inputs to GUI, change plot button to outline, and stop spinner
         self._update_plot_status(False)
         self._update_plot_spinner(False)
-
 # pylint: enable=too-many-arguments, too-many-positional-arguments
 
-    def _locate_gui_points(self, x, y, data, bounds):
+    def _locate_gui_points(self, x, y, data, boxes):
         ''' Callback for locate streams '''
         if self._gui_plot_data:
+            if super()._locate_points(data, self._gui_plot_data, self._gui_panel[2]):
+                return self._last_gui_plot
+            if super()._locate_boxes(boxes, self._gui_plot_data, self._gui_panel[3]):
+                return self._last_gui_plot
             super()._locate_cursor(x, y, self._gui_plot_data, self._gui_panel[0][1])
-            super()._locate_points(data, self._gui_plot_data, self._gui_panel[2])
-            super()._locate_box(bounds, self._gui_plot_data, self._gui_panel[3])
         return self._last_gui_plot
 
     def _do_gui_selection(self):

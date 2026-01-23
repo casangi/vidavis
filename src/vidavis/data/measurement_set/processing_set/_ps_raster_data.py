@@ -30,7 +30,7 @@ def raster_data(ps_xdt, plot_inputs, logger):
         raise RuntimeError("Plot failed: raster plane selection yielded data with all nan values.")
 
     # Compute complex component of vis data
-    raster_xds[correlated_data] = get_axis_data(raster_xds, plot_inputs['vis_axis'], data_group).compute()
+    raster_xds[correlated_data] = get_axis_data(raster_xds, plot_inputs['vis_axis'], data_group)
 
     # Convert float time to datetime
     set_datetime_coordinate(raster_xds)
