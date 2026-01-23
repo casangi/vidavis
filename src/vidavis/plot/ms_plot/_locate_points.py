@@ -27,31 +27,24 @@ def get_locate_value(xds, coord, value):
 
     return value
 
-def cursor_changed(cursor, last_cursor):
-    ''' Check whether cursor position changed '''
-    x, y = cursor
-    if not x and not y:
-        return False # not cursor callback
-    if last_cursor and last_cursor == (x, y):
-        return False # same cursor
-    return True # new cursor or cursor changed
-
-def points_changed(data, last_points):
-    ''' Check whether point positions changed '''
+def data_changed(data, last_data):
+    ''' Check whether data changed, input as list of tuples '''
     if not data:
-        return False # not points callback
-    if last_points and last_points == data:
-        return False # same points
-    return True # new points, points changed, or points deleted
+        return False # not callback for this data
+    if last_data and len(last_data) == len(data) and last_data == data:
+        return False # same data
+    return True # new data, data changed, or data removed
 
-def box_changed(bounds, last_box):
-    ''' Check whether box position changed '''
-    # No bounds = None
-    if not bounds:
-        return False # no data, not box select callback
-    if last_box and last_box == bounds:
-        return False # same box
-    return True # new box, box changed, or box deleted
+def get_new_data(data, last_data):
+    ''' Return data not in last_data, input as list of tuples '''
+    new_data = []
+    if last_data:
+        for info in data:
+            if info not in last_data:
+                new_data.append(info)
+    else:
+        new_data = data
+    return new_data
 
 def update_cursor_location(cursor, plot_axes, xds, cursor_locate_box):
     ''' Show data values for cursor x,y position in cursor location box (pn.WidgetBox) '''
@@ -71,33 +64,32 @@ def update_cursor_location(cursor, plot_axes, xds, cursor_locate_box):
     # Add location column to widget box
     cursor_locate_box.append(location_column)
 
-def update_points_location(data, plot_axes, xds, points_tab_feed):
+def update_points_location(points, plot_axes, xds, points_tab_feed):
     ''' Show data values for points in point_draw in tab and log '''
     locate_log = []
-    if data:
-        x_axis, y_axis, vis_axis = plot_axes
-        for point in data:
-            # Locate point
-            point_position = {x_axis: point[0], y_axis: point[1]}
-            point_location = _locate_point(xds, point_position, vis_axis)
+    x_axis, y_axis, vis_axis = plot_axes
+    for point in points:
+        # Locate point
+        point_position = {x_axis: point[0], y_axis: point[1]}
+        point_location = _locate_point(xds, point_position, vis_axis)
 
-            # Format location and add to points locate column
-            location_layout = _layout_point_location(point_location)
-            points_tab_feed.append(location_layout)
-            points_tab_feed.append(pn.layout.Divider())
+        # Format location and add to points locate column
+        location_layout = _layout_point_location(point_location)
+        points_tab_feed.append(location_layout)
+        points_tab_feed.append(pn.layout.Divider())
 
-            # Format and add to log
-            location_list = [f"{static_text.name}={static_text.value}" for static_text in point_location]
-            locate_log.append(", ".join(location_list))
+        # Format and add to log
+        location_list = [f"{static_text.name}={static_text.value}" for static_text in point_location]
+        locate_log.append(", ".join(location_list))
     return locate_log
 
-def update_box_location(bounds, plot_axes, xds, box_tab_feed):
+# pylint: disable=too-many-locals
+def update_boxes_location(boxes, plot_axes, xds, box_tab_feed):
     ''' Show data values for points in box_select in tab and log '''
-    box_tab_feed.clear()
     locate_log = []
-    if bounds:
-        x_axis, y_axis, vis_axis = plot_axes
-        box_bounds = {x_axis: (bounds[0], bounds[2]), y_axis: (bounds[1], bounds[3])}
+    x_axis, y_axis, vis_axis = plot_axes
+    for box in boxes:
+        box_bounds = {x_axis: (box[0], box[2]), y_axis: (box[1], box[3])}
         npoints, point_locations = _locate_box(xds, box_bounds, vis_axis)
 
         message = f"Locate {npoints} points"
@@ -115,6 +107,7 @@ def update_box_location(bounds, plot_axes, xds, box_tab_feed):
             location_list = [f"{static_text.name}={static_text.value}" for static_text in point]
             locate_log.append(", ".join(location_list))
     return locate_log
+# pylint: enable=too-many-locals
 
 def _locate_point(xds, position, vis_axis):
     '''
