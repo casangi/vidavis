@@ -95,31 +95,31 @@ class RasterPlot:
             return None
 
         data_params = self._plot_params['data']
-        plot_params = self._plot_params['plot']
-
-        x_axis = plot_params['axis_labels']['x']['axis']
-        y_axis = plot_params['axis_labels']['y']['axis']
-        c_axis = plot_params['axis_labels']['c']['axis']
-
-        # Set plot axes to numeric coordinates if needed
-        xds = set_index_coordinates(data, (x_axis, y_axis))
+        axis_labels = self._plot_params['plot']['axis_labels']
 
         # Prefix c_axis name with aggregator
-        xda_name = c_axis
+        xda_name = axis_labels['c']['axis']
         if data_params['aggregator']:
             xda_name = "_".join([data_params['aggregator'], xda_name])
 
-        # Plot unflagged and flagged data
-        xda = xds[data_params['correlated_data']].where(xds.FLAG == 0.0).rename(xda_name)
-        unflagged_plot = self._plot_xda(xda)
-        flagged_xda = xds[data_params['correlated_data']].where(xds.FLAG == 1.0).rename("flagged_" + xda_name)
-        flagged_plot = self._plot_xda(flagged_xda, True)
+        # Set plot axes to numeric coordinates if needed
+        xds = set_index_coordinates(data, (axis_labels['x']['axis'], axis_labels['y']['axis']))
+        xda = xds[data_params['correlated_data']].rename(xda_name)
 
+        # Calculate data range for flagged and unflagged data for color limits
+        unflagged_xda = xda.where(xds.FLAG == 0.0)
+        flagged_xda = xda.where(xds.FLAG == 1.0).rename("flagged " + xda_name)
+        unflagged_data_range = (unflagged_xda.min().values.item(), unflagged_xda.max().values.item())
+        flagged_data_range = (flagged_xda.min().values.item(), flagged_xda.max().values.item())
         if is_gui: # update data range for colorbar
-            self._plot_params['data']['data_range'] = (xda.min().values.item(), xda.max().values.item())
+            self._plot_params['data']['data_range'] = unflagged_data_range
+
+        # Plot all data as unflagged (with hover tool), then overlay flagged data
+        unflagged_plot = self._plot_xda(xda, False, unflagged_data_range)
+        flagged_plot = self._plot_xda(flagged_xda, True, flagged_data_range)
 
         # Make Overlay plot
-        return flagged_plot * unflagged_plot
+        return unflagged_plot.opts(tools=['hover']) * flagged_plot.opts(tools=[])
 
     def _get_plot_title(self, data, plot_inputs, ms_name):
         ''' Form string containing ms name and selected values using data (xArray Dataset) '''
@@ -172,34 +172,34 @@ class RasterPlot:
         self._plot_params['plot']['axis_labels'][axis]['label'] = axis_labels[1]
         self._plot_params['plot']['axis_labels'][axis]['ticks'] = axis_labels[2]
 
-    def _plot_xda(self, xda, is_flagged=False):
-        # Returns Quadmesh plot if raster 2D data, Scatter plot if raster 1D data, or None if no data
-        plot_params = self._plot_params['plot']
-        style_params = self._plot_params['style']
+    def _plot_xda(self, xda, is_flagged=False, data_range=None):
+        ''' Return Quadmesh plot if raster 2D data, Scatter plot if raster 1D data, or None if no data '''
+        # Color limits
+        c_lim = self._plot_params['plot']['color_limits']
+        c_lim = data_range if c_lim is None else c_lim
 
-        x_axis = plot_params['axis_labels']['x']['axis']
-        y_axis = plot_params['axis_labels']['y']['axis']
-        c_label = plot_params['axis_labels']['c']['label']
-        c_lim = plot_params['color_limits']
+        axis_labels = self._plot_params['plot']['axis_labels']
+        x_axis = axis_labels['x']['axis']
+        y_axis = axis_labels['y']['axis']
+        c_label = axis_labels['c']['label']
 
+        # Set time formatter
         x_formatter = get_time_formatter() if x_axis == 'time' else None
         y_formatter = get_time_formatter() if y_axis == 'time' else None
 
+        # Show colorbar
+        show_colorbar = False
         if xda.count().values > 0:
-            if is_flagged:
-                show_colorbar = style_params['show_flagged_colorbar']
-            else :
-                show_colorbar = style_params['show_colorbar']
-        else:
-            show_colorbar = False
+            show_colorbar = self._plot_params['style']['show_flagged_colorbar'] if is_flagged else self._plot_params['style']['show_colorbar']
 
+        # Set colorbar label and map
         if is_flagged:
             c_label = "Flagged " + c_label
-            colormap = style_params['flagged_cmap']
-            plot_params['flagged_colorbar'] = show_colorbar
+            colormap = self._plot_params['style']['flagged_cmap']
+            self._plot_params['plot']['flagged_colorbar'] = show_colorbar
         else:
-            colormap = style_params['unflagged_cmap']
-            plot_params['unflagged_colorbar'] = show_colorbar
+            colormap = self._plot_params['style']['unflagged_cmap']
+            self._plot_params['plot']['unflagged_colorbar'] = show_colorbar
 
         if xda[x_axis].size > 1 and xda[y_axis].size > 1:
             # Raster 2D data
@@ -209,16 +209,16 @@ class RasterPlot:
                 clim=c_lim,
                 cmap=colormap,
                 clabel=c_label,
-                title=plot_params['title'],
-                xlabel=plot_params['axis_labels']['x']['label'],
-                ylabel=plot_params['axis_labels']['y']['label'],
+                title=self._plot_params['plot']['title'],
+                xlabel=axis_labels['x']['label'],
+                ylabel=axis_labels['y']['label'],
                 xformatter=x_formatter,
                 yformatter=y_formatter,
-                xticks=plot_params['axis_labels']['x']['ticks'],
-                yticks=plot_params['axis_labels']['y']['ticks'],
+                xticks=axis_labels['x']['ticks'],
+                yticks=axis_labels['y']['ticks'],
                 rot=45, # angle for x axis labels
                 colorbar=show_colorbar,
-                responsive=True, # resize to fill browser window if True
+                responsive=True, # resize to fill browser window
             )
         else:
             # Cannot raster 1D data, use scatter from pandas dataframe
@@ -227,16 +227,16 @@ class RasterPlot:
                 x=x_axis,
                 y=y_axis,
                 c=xda.name,
-                clim=plot_params['color_limits'],
+                clim=c_lim,
                 cmap=colormap,
                 clabel=c_label,
-                title=plot_params['title'],
-                xlabel=plot_params['axis_labels']['x']['label'],
-                ylabel=plot_params['axis_labels']['y']['label'],
+                title=self._plot_params['plot']['title'],
+                xlabel=axis_labels['x']['label'],
+                ylabel=axis_labels['y']['label'],
                 xformatter=x_formatter,
                 yformatter=y_formatter,
-                xticks=plot_params['axis_labels']['x']['ticks'],
-                yticks=plot_params['axis_labels']['y']['ticks'],
+                xticks=axis_labels['x']['ticks'],
+                yticks=axis_labels['y']['ticks'],
                 rot=45,
                 marker='s', # square
                 responsive=True,

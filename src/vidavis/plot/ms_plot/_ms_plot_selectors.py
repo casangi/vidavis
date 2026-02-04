@@ -80,7 +80,8 @@ def style_selector(style_callback, color_range_callback):
     )
 
     color_range_slider = pn.widgets.RangeSlider(
-        name="Colorbar range",
+        name="Set manual color range",
+        align=('start', 'end'), # (horizontal, vertical) to place left (h=start) and bottom (v=end)
     )
 
     select_color_range = pn.bind(color_range_callback, color_mode_selector, color_range_slider)

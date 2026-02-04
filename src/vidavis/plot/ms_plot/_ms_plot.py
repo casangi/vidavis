@@ -75,7 +75,6 @@ class MsPlot:
         self._last_points = None
         self._last_boxes = None
         self._locate_plot_options = {
-            'tools': ['hover'],
             'muted_alpha': 0,
             'selection_fill_alpha': 0.2,    # dim selected areas of plot
             'nonselection_fill_alpha': 1.0, # do not dim unselected areas of plot
@@ -463,12 +462,14 @@ class MsPlot:
         x = get_locate_value(plot_data, plot_axes[0], x)
         y = get_locate_value(plot_data, plot_axes[1], y)
         cursor = (x, y)
-        if data_changed(cursor, self._last_cursor):
-            # new cursor position - update cursor location box
-            update_cursor_location(cursor, plot_axes, plot_data, cursor_box)
-            self._last_cursor = cursor
-            return True
-        return False
+
+        if not data_changed(cursor, self._last_cursor):
+            return False
+
+        # new cursor position - update cursor location box
+        update_cursor_location(cursor, plot_axes, plot_data, cursor_box)
+        self._last_cursor = cursor
+        return True
 
     def _locate_points(self, point_data, plot_data, points_tab):
         ''' Show points locations from point_draw tool '''
@@ -489,12 +490,14 @@ class MsPlot:
         points_to_locate = get_new_data(data_points, self._last_points)
         self._last_points = data_points
 
+        if not points_to_locate: # point deleted
+            return False
+
         if len(points_to_locate) == len(data_points):
             points_tab.clear() # clear for locating all points
 
-        if points_to_locate:
-            location_info = update_points_location(points_to_locate, self._get_plot_axes(), plot_data, points_tab)
-            self._log_to_file_only(location_info)
+        location_info = update_points_location(points_to_locate, self._get_plot_axes(), plot_data, points_tab)
+        self._log_to_file_only(location_info)
         return True
 
     def _locate_boxes(self, boxes, plot_data, box_tab):
@@ -520,10 +523,12 @@ class MsPlot:
         boxes_to_locate = get_new_data(box_list, self._last_boxes)
         self._last_boxes = box_list
 
-        if boxes_to_locate:
-            box_tab.clear()
-            location_info = update_boxes_location(boxes_to_locate, self._get_plot_axes(), plot_data, box_tab)
-            self._log_to_file_only(location_info)
+        if not boxes_to_locate: # box deleted
+            return False
+
+        box_tab.clear()
+        location_info = update_boxes_location(boxes_to_locate, self._get_plot_axes(), plot_data, box_tab)
+        self._log_to_file_only(location_info)
         return True
 
     def _log_to_file_only(self, messages):
