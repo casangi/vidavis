@@ -178,10 +178,12 @@ class RasterPlot:
         c_lim = self._plot_params['plot']['color_limits']
         c_lim = data_range if c_lim is None else c_lim
 
-        # Set time formatter
         axis_labels = self._plot_params['plot']['axis_labels']
         x_axis = axis_labels['x']['axis']
         y_axis = axis_labels['y']['axis']
+        c_label = axis_labels['c']['label']
+
+        # Set time formatter
         x_formatter = get_time_formatter() if x_axis == 'time' else None
         y_formatter = get_time_formatter() if y_axis == 'time' else None
 
@@ -192,7 +194,7 @@ class RasterPlot:
 
         # Set colorbar label and map
         if is_flagged:
-            c_label = "Flagged " + axis_labels['c']['label']
+            c_label = "Flagged " + c_label
             colormap = self._plot_params['style']['flagged_cmap']
             self._plot_params['plot']['flagged_colorbar'] = show_colorbar
         else:
@@ -206,7 +208,7 @@ class RasterPlot:
                 y_axis,
                 clim=c_lim,
                 cmap=colormap,
-                clabel=axis_labels['c']['label'],
+                clabel=c_label,
                 title=self._plot_params['plot']['title'],
                 xlabel=axis_labels['x']['label'],
                 ylabel=axis_labels['y']['label'],
