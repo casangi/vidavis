@@ -579,17 +579,18 @@ class MsRaster(MsPlot):
         return self._empty_plot
 
     def _create_empty_plot(self):
-        ''' Create empty Overlay plot for DynamicMap with colormap params and required tools enabled '''
+        ''' Create empty Overlay plot for DynamicMap with colormap params enabled '''
         plot_params = self._raster_plot.get_plot_params()
         self._empty_plot = hv.Overlay(
             hv.QuadMesh([]).opts(
-                colorbar=plot_params['style']['show_flagged_colorbar'],
-                cmap=plot_params['style']['flagged_cmap'],
+                colorbar=plot_params['style']['show_colorbar'],
+                cmap=plot_params['style']['unflagged_cmap'],
+                colorbar_position='left',
                 responsive=True,
             ) * hv.QuadMesh([]).opts(
-                colorbar=plot_params['style']['show_colorbar'],
-                colorbar_position='left',
-                cmap=plot_params['style']['unflagged_cmap'],
+                colorbar=plot_params['style']['show_flagged_colorbar'],
+                colorbar_position='right',
+                cmap=plot_params['style']['flagged_cmap'],
                 responsive=True,
             )
         )
