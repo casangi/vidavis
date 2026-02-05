@@ -25,7 +25,7 @@ copyright = '2025 Associated Universities, Inc. Washington DC, USA.'
 author = 'CASA visualization team'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1.5'
+release = '0.1.7'
 
 
 # -- General configuration ---------------------------------------------------

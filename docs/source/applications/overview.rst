@@ -114,13 +114,12 @@ Install required packages::
 Install for MSv2 Conversion
 ```````````````````````````
 
-To install **xradio** with **python-casacore** for MSv2 conversion::
+Currently, casacore and zarr are automatically installed with xradio for
+vidavis if the system platform is Linux.
 
-  pip install "xradio[python-casacore]"
-
-.. note::
-   On macOS it is required to **pre-install** python-casacore using
-   ``conda install -c conda-forge python-casacore``.
+On macOS, zarr only is installed. To enable conversion from MSv2 to MSv4, it is
+required to **pre-install** python-casacore using
+``conda install -c conda-forge python-casacore``.
 
 It is also possible to use
 `casatools <https://casadocs.readthedocs.io/en/stable/api/casatools.html>`_
