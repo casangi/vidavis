@@ -27,14 +27,6 @@ def get_locate_value(xds, coord, value):
 
     return value
 
-def data_changed(data, last_data):
-    ''' Check whether data changed, input as list of tuples '''
-    if not data:
-        return False # not callback for this data
-    if last_data and len(last_data) == len(data) and last_data == data:
-        return False # same data
-    return True # new data, data changed, or data removed
-
 def get_new_data(data, last_data):
     ''' Return data not in last_data, input as list of tuples '''
     new_data = []

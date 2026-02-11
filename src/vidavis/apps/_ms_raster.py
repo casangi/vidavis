@@ -184,8 +184,8 @@ class MsRaster(MsPlot):
 
         start = time.time()
 
-        # Unlink previous plot from data streams
-        super()._unlink_plot_locate()
+        # Remove locate from previous plot
+        super()._remove_locate()
 
         # Clear for new plot
         self._reset_plot(clear_plots)
@@ -243,7 +243,7 @@ class MsRaster(MsPlot):
             filename = f"{self._ms_info['basename']}_raster.png"
         super().save(filename, fmt, width, height)
 
-    def _do_plot(self, is_gui_plot=False):
+    def _do_plot(self):
         ''' Create plot using plot inputs '''
         if not self._plot_init:
             self._init_plot()
@@ -255,10 +255,7 @@ class MsRaster(MsPlot):
         if not self._plot_inputs.is_layout():
             x_axis = self._plot_inputs.get_input('x_axis')
             y_axis = self._plot_inputs.get_input('y_axis')
-            if is_gui_plot:
-                self._gui_plot_data = set_index_coordinates(raster_data, (x_axis, y_axis))
-            else:
-                self._plot_data = set_index_coordinates(raster_data, (x_axis, y_axis))
+            self._plot_data = set_index_coordinates(raster_data, (x_axis, y_axis))
 
         # Add params needed for plot: auto color range and ms name
         self._set_auto_color_range() # set calculated limits if auto mode
@@ -450,13 +447,13 @@ class MsRaster(MsPlot):
             'y_axis': self._plot_inputs.get_input('y_axis'),
         }
 
-        self._gui_panel = create_raster_gui(callbacks, plot_info, self._empty_plot)
+        self._panel = create_raster_gui(callbacks, plot_info, self._empty_plot)
 
         # Start Panel server in a background daemon thread so it doesn't block process exit.
         # Note: The Panel server will automatically stop when the Python process exits.
         # Any open browser windows or tabs displaying the plot will lose connection at that point.
         server_thread = threading.Thread(
-            target=lambda panel=self._gui_panel, name=self._app_name: panel.show(title=name, threaded=False),
+            target=lambda panel=self._panel, name=self._app_name: panel.show(title=name, threaded=False),
             daemon=True
         )
         server_thread.start()
@@ -471,7 +468,7 @@ class MsRaster(MsPlot):
                 do_plot (Plot button clicked) - return plot with inputs from GUI
             This function *must* return plot, even if empty plot or last plot, for DynamicMap.
         '''
-        if not do_plot or not self._gui_panel:
+        if not do_plot or not self._panel:
             return
 
         # Remove toast notification and collapse selection accordion
@@ -500,12 +497,12 @@ class MsRaster(MsPlot):
                     self._plot_inputs.set_input('data_dims', self._ms_info['data_dims'])
                     self._plot_inputs.check_inputs()
                     gui_plot = self._do_gui_plot()
-                    self._last_gui_plot = gui_plot # save plot for locate callback
+                    self._last_plot = gui_plot # save plot for callback
                     self._logger.info("Plot update complete")
 
                     # Put plot with dmap for locate streams in gui panel
-                    dmap = self._get_locate_dmap(self._locate_gui_points)
-                    self._gui_panel[0][0].object = gui_plot * dmap
+                    dmap = self._get_locate_dmaps()
+                    self._panel[0][0].object = gui_plot * dmap
                 except (ValueError, TypeError, KeyError, RuntimeError) as e:
                     # Clear plot, inputs invalid
                     self._notify(str(e), 'error', 0)
@@ -522,16 +519,6 @@ class MsRaster(MsPlot):
         self._update_plot_status(False)
         self._update_plot_spinner(False)
 # pylint: enable=too-many-arguments, too-many-positional-arguments
-
-    def _locate_gui_points(self, x, y, data, boxes):
-        ''' Callback for locate streams '''
-        if self._gui_plot_data:
-            if super()._locate_points(data, self._gui_plot_data, self._gui_panel[2]):
-                return self._last_gui_plot
-            if super()._locate_boxes(boxes, self._gui_plot_data, self._gui_panel[3]):
-                return self._last_gui_plot
-            super()._locate_cursor(x, y, self._gui_plot_data, self._gui_panel[0][1])
-        return self._last_gui_plot
 
     def _do_gui_selection(self):
         ''' Apply selections selected in GUI '''
@@ -560,13 +547,9 @@ class MsRaster(MsPlot):
                     return layout_plot
 
                 # Make single Overlay raster plot for DynamicMap
-                gui_plot = self._do_plot(True)
-                gui_plot = gui_plot.opts(
-                    hv.opts.QuadMesh(**self._locate_plot_options),
-                    hv.opts.Scatter(**self._locate_plot_options)
-                )
+                gui_plot = self._do_plot()
 
-                # Update color limits in gui with data range
+                # Update manual color range limits in gui with data range
                 plot_params = self._raster_plot.get_plot_params()
                 self._update_color_range(plot_params)
 
@@ -597,7 +580,7 @@ class MsRaster(MsPlot):
 
     def _update_color_range(self, plot_params):
         ''' Set the start/end range on the colorbar to min/max of plot data '''
-        if self._gui_panel and 'data' in plot_params and 'data_range' in plot_params['data']:
+        if self._panel and 'data' in plot_params and 'data_range' in plot_params['data']:
             # Update range slider start and end to data min and max
             data_range = plot_params['data']['data_range']
             style_selectors = self._get_selector('style')
@@ -610,10 +593,10 @@ class MsRaster(MsPlot):
     ###
     def _get_selector(self, name):
         ''' Return selector group for name, for setting options '''
-        if not self._gui_panel:
+        if not self._panel:
             return None
 
-        selectors = self._gui_panel[4][1]
+        selectors = self._panel[4][1]
         if name == "selectors":
             return selectors
 
@@ -708,7 +691,7 @@ class MsRaster(MsPlot):
     ###
     def _select_filename(self, filename):
         ''' Set filename in text box from file selector value (list) '''
-        if filename and self._gui_panel:
+        if filename and self._panel:
             file_selectors = self._get_selector('file')
 
             # Collapse FileSelector card
@@ -721,7 +704,7 @@ class MsRaster(MsPlot):
     def _set_iter_values(self, iter_axis):
         ''' Set up player with values when iter_axis is selected '''
         iter_axis = None if iter_axis == 'None' else iter_axis
-        if iter_axis and self._gui_panel:
+        if iter_axis and self._panel:
             iter_values = self._ms_data.get_dimension_values(iter_axis)
             if iter_values:
 
@@ -762,21 +745,21 @@ class MsRaster(MsPlot):
 
     def _update_plot_spinner(self, plot_clicked):
         ''' Callback to start spinner when Plot button clicked. '''
-        if self._gui_panel:
+        if self._panel:
             # Start spinner
-            spinner = self._gui_panel[4][2][1]
+            spinner = self._panel[4][2][1]
             spinner.value = plot_clicked
 
     def _update_plot_status(self, plot_changed):
         ''' Change button color when plot inputs change. '''
-        if self._gui_panel:
+        if self._panel:
             # Set button color
-            button = self._gui_panel[4][2][0]
+            button = self._panel[4][2][0]
             button.button_style = 'solid' if plot_changed else 'outline'
 
     def _show_plot_inputs(self):
         ''' Show inputs for raster plot in column in GUI tab '''
-        inputs_column = self._gui_panel[1]
+        inputs_column = self._panel[1]
         super()._fill_inputs_column(inputs_column)
 
     ###

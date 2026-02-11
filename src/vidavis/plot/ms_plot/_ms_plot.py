@@ -17,7 +17,7 @@ from selenium import webdriver
 from toolviper.utils.logger import setup_logger
 
 from vidavis.data.measurement_set._ms_data import MsData
-from vidavis.plot.ms_plot._locate_points import get_locate_value, data_changed, get_new_data, update_cursor_location, update_points_location, update_boxes_location
+from vidavis.plot.ms_plot._locate_points import get_locate_value, get_new_data, update_cursor_location, update_points_location, update_boxes_location
 from vidavis.toolbox import AppContext
 
 class MsPlot:
@@ -60,30 +60,18 @@ class MsPlot:
             pn.config.notifications = True
             self._toast = None # for destroy() with new plot or new notification
 
-            # Initialize gui panel for callbacks
-            self._gui_plot_data = None
             self._gui_selection = {}
-
-            # For _update_plot callback: check if inputs changed
             self._last_plot_inputs = None
             self._last_style_inputs = None
-            self._last_gui_plot = None # return value
+            self._last_gui_plot = None # return value for updating plot inputs from GUI
 
-        # For locate callback: check if points changed
-        self._plot_axes = None
-        self._last_cursor = None
+        self._panel = None
+        self._plot_data = None
+
+        # Check which points changed for locate
+        self._plot_axes = None # for normalizing points
         self._last_points = None
         self._last_boxes = None
-        self._locate_plot_options = {
-            'muted_alpha': 0,
-            'selection_fill_alpha': 0.2,    # dim selected areas of plot
-            'nonselection_fill_alpha': 1.0, # do not dim unselected areas of plot
-        }
-
-        # Initialize panels for callbacks
-        self._gui_panel = None
-        self._show_panel = None
-        self._plot_data = None
 
         # Set data (if ms)
         self._ms_data = None
@@ -156,9 +144,10 @@ class MsPlot:
         self._plots.clear()
         self._plot_params.clear()
         self._plot_axes = None
-        if self._gui_panel is not None:
-            self._gui_panel[2].clear() # locate points
-            self._gui_panel[3].clear() # locate box
+
+        if not self._show_gui:
+            # Remove locate dmaps and widgets since plot data will be updated
+            self._remove_locate()
 
     def clear_selection(self):
         ''' Clear data selection and restore original ProcessingSet '''
@@ -185,23 +174,18 @@ class MsPlot:
 
         # Show plots and plot inputs in tabs
         if self._plot_inputs.is_layout():
-            self._show_panel = pn.Tabs(('Plot', plot))
+            self._panel = pn.Tabs(('Plot', plot))
             if inputs_column:
-                self._show_panel.append(('Plot Inputs', inputs_column))
+                self._panel.append(('Plot Inputs', inputs_column))
         else:
-            plot = plot.options(
-                hv.opts.QuadMesh(**self._locate_plot_options),
-                hv.opts.Scatter(**self._locate_plot_options),
-            )
-
             # Add DynamicMap for streams for single plot
-            dmap = self._get_locate_dmap(self._locate)
+            dmaps = self._get_locate_dmaps()
 
             # Create panel layout
-            self._show_panel = pn.Tabs(
+            self._panel = pn.Tabs(
                 ('Plot',
                     pn.Column(
-                        plot * dmap,
+                        plot * dmaps,
                         pn.WidgetBox(sizing_mode='stretch_width'), # cursor info
                     )
                 ),
@@ -210,9 +194,9 @@ class MsPlot:
 
             # Add tabs for inputs and locate
             if inputs_column:
-                self._show_panel.append(('Plot Inputs', inputs_column))
-            self._show_panel.append(('Locate Points', pn.Feed(height_policy='max')))
-            self._show_panel.append(('Locate Box', pn.Feed(height_policy='max')))
+                self._panel.append(('Plot Inputs', inputs_column))
+            self._panel.append(('Locate Points', pn.Feed(height_policy='max')))
+            self._panel.append(('Locate Box', pn.Feed(height_policy='max')))
 
             # Compute coordinate values for locate
             self._compute_plot_metadata(self._plot_data)
@@ -224,7 +208,7 @@ class MsPlot:
         # Note: The Panel server will automatically stop when the Python process exits.
         # Any open browser windows or tabs displaying the plot will lose connection at that point.
         server_thread = threading.Thread(
-            target=lambda panel=self._show_panel, name=self._app_name: panel.show(title=name, threaded=False),
+            target=lambda panel=self._panel, name=self._app_name: panel.show(title=name, threaded=False),
             daemon=True
         )
         server_thread.start()
@@ -406,33 +390,41 @@ class MsPlot:
         for coord in xds.coords:
             xds[coord] = xds[coord].compute()
 
-    def _get_locate_dmap(self, callback):
-        ''' Return DynamicMap with streams callback to locate points '''
-        points = hv.Points([]).opts(
-            size=5,
-            fill_color='white'
+    def _get_locate_dmaps(self):
+        ''' Return DynamicMaps with streams callbacks to locate points '''
+        # Cursor
+        cursor_dmap = hv.DynamicMap(
+            self._locate_cursor,
+            streams=[hv.streams.PointerXY()]
         )
-        boxes = hv.Rectangles([])
-        dmap = hv.DynamicMap(
-            callback,
-            streams=[
-                hv.streams.PointerXY(),                               # cursor location (x, y)
-                hv.streams.PointDraw(source=points),                  # fixed points location (data)
-                hv.streams.BoxEdit(source=boxes).rename(data='boxes') # box location (boxes)
-            ]
-        )
-        return (dmap * points * boxes).options(
-            hv.opts.Rectangles(fill_alpha=0.5, line_color='white'))
 
-    def _unlink_plot_locate(self):
-        ''' Disconnect streams when plot data is going to be replaced '''
-        if self._show_panel and len(self._show_panel.objects) == 4:
-            # Remove dmap (streams with callback) from previous plot
-            self._show_panel[0][0] = self._last_plot.opts(tools=['hover'])
+        # PointDraw points
+        points = hv.Points([]).opts()
+        points_dmap = hv.DynamicMap(
+            self._locate_points,
+            streams=[hv.streams.PointDraw(source=points)]
+        )
+
+        # BoxEdit boxes
+        boxes = hv.Rectangles([])
+        box_dmap = hv.DynamicMap(
+            self._locate_boxes,
+            streams=[hv.streams.BoxEdit(source=boxes)]
+        )
+        return (cursor_dmap * points_dmap * points * box_dmap * boxes).options(
+            hv.opts.Rectangles(fill_alpha=0.5, line_color='white'),
+            hv.opts.Points(size=5, fill_color='white')
+        )
+
+    def _remove_locate(self):
+        ''' Remove locate dmaps and widgets from panel '''
+        if self._panel and len(self._panel.objects) == 4:
+            # Remove locate dmaps
+            self._panel[0][0].object = self._last_plot if self._last_plot else self._empty_plot
             # Remove locate widgets
-            self._show_panel[0].pop(1) # cursor locate box
-            self._show_panel.pop(3)    # box locate tab
-            self._show_panel.pop(2)    # points locate tab
+            self._panel[0].pop(1) # cursor locate box
+            self._panel.pop(3)    # box locate tab
+            self._panel.pop(2)    # points locate tab
 
     def _get_plot_axes(self):
         ''' Return x, y, vis axes '''
@@ -443,96 +435,93 @@ class MsPlot:
             self._plot_axes = (x_axis, y_axis, vis_axis)
         return self._plot_axes
 
-    def _locate(self, x, y, data, boxes):
-        ''' Callback for all show plot streams '''
-        if self._locate_points(data, self._plot_data, self._show_panel[2]):
-            return self._last_plot
-
-        if self._locate_boxes(boxes, self._plot_data, self._show_panel[3]):
-            return self._last_plot
-
-        self._locate_cursor(x, y, self._plot_data, self._show_panel[0][1])
-        return self._last_plot
-
-    def _locate_cursor(self, x, y, plot_data, cursor_box):
+    def _locate_cursor(self, x, y):
         ''' Show location from cursor position in cursor locate box '''
-        if not x and not y: # not cursor callback
-            return False
+        # Locate does not change plot
+        # Callback must return holoviews Element even if empty
+        points = hv.Points([])
+
+        if not self._plot_data or (not x and not y):
+            return points
+
+        # Normalize cursor to plot data values
         plot_axes = self._get_plot_axes()
-        x = get_locate_value(plot_data, plot_axes[0], x)
-        y = get_locate_value(plot_data, plot_axes[1], y)
+        x = get_locate_value(self._plot_data, plot_axes[0], x)
+        y = get_locate_value(self._plot_data, plot_axes[1], y)
         cursor = (x, y)
+        update_cursor_location(cursor, plot_axes, self._plot_data, self._panel[0][1])
+        return points
 
-        if not data_changed(cursor, self._last_cursor):
-            return False
-
-        # new cursor position - update cursor location box
-        update_cursor_location(cursor, plot_axes, plot_data, cursor_box)
-        self._last_cursor = cursor
-        return True
-
-    def _locate_points(self, point_data, plot_data, points_tab):
+    def _locate_points(self, data):
         ''' Show points locations from point_draw tool '''
-        if not point_data or len(point_data['x']) == 0: # not points callback
-            return False
+        # Locate does not change plot
+        # Callback must return holoviews Element even if empty
+        points = hv.Points([])
 
+        if not self._plot_data or not data or len(data['x']) == 0:
+            return points
+
+        # Normalize points to plot data values
         plot_axes = self._get_plot_axes()
-        x_vals = point_data['x']
-        y_vals = point_data['y']
-        point_data['x'] = [get_locate_value(plot_data, plot_axes[0], x) for x in x_vals]
-        point_data['y'] = [get_locate_value(plot_data, plot_axes[1], y) for y in y_vals]
-        data_points = list(zip(point_data['x'], point_data['y']))
+        x_vals = data['x']
+        y_vals = data['y']
+        data['x'] = [get_locate_value(self._plot_data, plot_axes[0], x) for x in x_vals]
+        data['y'] = [get_locate_value(self._plot_data, plot_axes[1], y) for y in y_vals]
 
-        if not data_changed(data_points, self._last_points):
-            return False
-
-        # update selected points location tab with new points
+        # Update selected points location tab with new points only
+        data_points = list(zip(data['x'], data['y']))
         points_to_locate = get_new_data(data_points, self._last_points)
         self._last_points = data_points
 
         if not points_to_locate: # point deleted
-            return False
+            return points
 
+        # Clear tab for locating all points, else append
+        points_tab = self._panel[2]
         if len(points_to_locate) == len(data_points):
-            points_tab.clear() # clear for locating all points
+            points_tab.clear()
 
-        location_info = update_points_location(points_to_locate, self._get_plot_axes(), plot_data, points_tab)
+        # Locate points
+        location_info = update_points_location(points_to_locate, plot_axes, self._plot_data, points_tab)
         self._log_to_file_only(location_info)
-        return True
+        return points
 
-    def _locate_boxes(self, boxes, plot_data, box_tab):
+    def _locate_boxes(self, data):
         ''' Show points locations in box from box_select tool '''
-        if not boxes or len(boxes['x0']) == 0: # not box callback
-            return False
+        # Locate does not change plot
+        # Callback must return holoviews Element even if empty
+        boxes = hv.Rectangles([])
+
+        if not self._plot_data or not data:
+            return boxes
 
         plot_axes = self._get_plot_axes()
-        x0_vals = boxes['x0']
-        y0_vals = boxes['y0']
-        x1_vals = boxes['x1']
-        y1_vals = boxes['y1']
-        boxes['x0'] = [get_locate_value(plot_data, plot_axes[0], x0) for x0 in x0_vals]
-        boxes['y0'] = [get_locate_value(plot_data, plot_axes[1], y0) for y0 in y0_vals]
-        boxes['x1'] = [get_locate_value(plot_data, plot_axes[0], x1) for x1 in x1_vals]
-        boxes['y1'] = [get_locate_value(plot_data, plot_axes[1], y1) for y1 in y1_vals]
-        box_list = list(zip(boxes['x0'], boxes['y0'], boxes['x1'], boxes['y1']))
-
-        if not data_changed(box_list, self._last_boxes):
-            return False
+        x0_vals = data['x0']
+        y0_vals = data['y0']
+        x1_vals = data['x1']
+        y1_vals = data['y1']
+        data['x0'] = [get_locate_value(self._plot_data, plot_axes[0], x0) for x0 in x0_vals]
+        data['y0'] = [get_locate_value(self._plot_data, plot_axes[1], y0) for y0 in y0_vals]
+        data['x1'] = [get_locate_value(self._plot_data, plot_axes[0], x1) for x1 in x1_vals]
+        data['y1'] = [get_locate_value(self._plot_data, plot_axes[1], y1) for y1 in y1_vals]
 
         # update selected box location tab with new boxes
+        box_list = list(zip(data['x0'], data['y0'], data['x1'], data['y1']))
         boxes_to_locate = get_new_data(box_list, self._last_boxes)
         self._last_boxes = box_list
 
         if not boxes_to_locate: # box deleted
-            return False
+            return boxes
 
-        box_tab.clear()
-        location_info = update_boxes_location(boxes_to_locate, self._get_plot_axes(), plot_data, box_tab)
+        # Locate box
+        box_tab = self._panel[3]
+        box_tab.clear() # only locate points in new boxes
+        location_info = update_boxes_location(boxes_to_locate, plot_axes, self._plot_data, box_tab)
         self._log_to_file_only(location_info)
-        return True
+        return boxes
 
     def _log_to_file_only(self, messages):
-        ''' log messages to file only '''
+        ''' Log messages to file only, such as locate information '''
         self._logger.removeHandler(self._stdout_handler)
         for message in messages:
             self._logger.info(message)
