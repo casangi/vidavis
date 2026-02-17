@@ -18,6 +18,7 @@ from toolviper.utils.logger import setup_logger
 
 from vidavis.data.measurement_set._ms_data import MsData
 from vidavis.plot.ms_plot._locate_points import get_locate_value, get_new_data, update_cursor_location, update_points_location, update_boxes_location
+from vidavis.plot.ms_plot._raster_plot_gui import get_panel_tabs
 from vidavis.toolbox import AppContext
 
 class MsPlot:
@@ -166,42 +167,23 @@ class MsPlot:
         subplots = self._plot_inputs.get_input('subplots')
         plot = self._layout_plots(subplots)
 
-        # Add plot inputs column tab
-        inputs_column = None
-        if self._plot_params:
-            inputs_column = pn.Column()
-            self._fill_inputs_column(inputs_column)
-
         # Show plots and plot inputs in tabs
         if self._plot_inputs.is_layout():
-            self._panel = pn.Tabs(('Plot', plot))
-            if inputs_column:
-                self._panel.append(('Plot Inputs', inputs_column))
+            self._panel = pn.Tabs(
+                ('Plot', plot),
+                ('Plot Inputs', pn.Column()),
+            )
+            self._fill_inputs_column()
         else:
             # Add DynamicMap for streams for single plot
             dmaps = self._get_locate_dmaps()
-
-            # Create panel layout
-            self._panel = pn.Tabs(
-                ('Plot',
-                    pn.Column(
-                        plot * dmaps,
-                        pn.WidgetBox(sizing_mode='stretch_width'), # cursor info
-                    )
-                ),
-                sizing_mode='stretch_both',
-            )
-
-            # Add tabs for inputs and locate
-            if inputs_column:
-                self._panel.append(('Plot Inputs', inputs_column))
-            self._panel.append(('Locate Points', pn.Feed(height_policy='max')))
-            self._panel.append(('Locate Box', pn.Feed(height_policy='max')))
+            self._panel = get_panel_tabs(plot * dmaps)
+            self._fill_inputs_column()
 
             # Compute coordinate values for locate
             self._compute_plot_metadata(self._plot_data)
 
-            # return value for locate callback
+            # Save plot for removing locate tools
             self._last_plot = plot
 
         # Start Panel server in a background daemon thread so it doesn't block process exit.
@@ -375,15 +357,15 @@ class MsPlot:
                         value = [value, plot_inputs[param]]
                     self._plot_params[param] = value
 
-    def _fill_inputs_column(self, inputs_tab_column):
+    def _fill_inputs_column(self):
         ''' Format plot inputs and list in Panel column '''
-        if self._plot_params:
-            inputs_tab_column.clear()
-            plot_params = sorted([f"{key}={value}" for key, value in self._plot_params.items()])
-            for param in plot_params:
-                str_pane = pn.pane.Str(param)
-                str_pane.margin = (0, 10)
-                inputs_tab_column.append(str_pane)
+        inputs_column = self._panel[1]
+        inputs_column.clear()
+        plot_params = sorted([f"{key}={value}" for key, value in self._plot_params.items()])
+        for param in plot_params:
+            str_pane = pn.pane.Str(param)
+            str_pane.margin = (0, 10)
+            inputs_column.append(str_pane)
 
     def _compute_plot_metadata(self, xds):
         ''' Compute coordinate dask arrays to numpy arrays in memory '''

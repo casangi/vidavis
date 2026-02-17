@@ -194,7 +194,7 @@ def iteration_selector(axis_options, axis_callback, iter_callback):
     iter_axis_selector = pn.widgets.Select(
         name="Iteration axis",
         options=iter_options,
-        description="Select axis over which to iterate",
+        description="Select axis over which to iterate plots",
         sizing_mode='scale_width',
     )
 
@@ -282,7 +282,6 @@ def iteration_selector(axis_options, axis_callback, iter_callback):
 def title_selector(callback):
     ''' Return a layout for title input using TextInput '''
     title_input = pn.widgets.TextInput(
-        name="Title",
         placeholder="Enter title for plot ('ms' to use MS name)",
         sizing_mode='stretch_width',
     )
@@ -338,6 +337,7 @@ def _add_multi_choice(ps_selection, names):
         ps_selection.append(
             pn.widgets.MultiChoice(
                 name=name,
+                placeholder='Click to select from list',
                 sizing_mode='stretch_width',
             )
         )

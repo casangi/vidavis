@@ -475,6 +475,7 @@ class MsRaster(MsPlot):
         if self._toast:
             self._toast.destroy()
         self._get_selector("selectors").active = []
+        self._get_selector("selection").active = []
         gui_plot = None
 
         if self._plot_inputs.get_input('ms'):
@@ -509,7 +510,7 @@ class MsRaster(MsPlot):
 
         # Update plot inputs for gui tab
         self._set_plot_params(plot_inputs | style_inputs)
-        self._show_plot_inputs()
+        super()._fill_inputs_column()
 
         # Save inputs to check if changed next time
         self._last_plot_inputs = plot_inputs.copy()
@@ -596,11 +597,14 @@ class MsRaster(MsPlot):
         if not self._panel:
             return None
 
-        selectors = self._panel[4][1]
+        if name == "selection":
+            return self._panel[4][1]
+
+        selectors = self._panel[4][0][0]
         if name == "selectors":
             return selectors
 
-        selectors_index = {'file': 0, 'style': 1, 'sel': 2, 'axes': 3, 'agg': 4, 'iter': 5, 'title': 6}
+        selectors_index = {'file': 0, 'style': 1, 'title': 2, 'axes': 3, 'agg': 4, 'iter': 5}
         return selectors[selectors_index[name]]
 
     def _update_gui_ms_options(self):
@@ -640,7 +644,7 @@ class MsRaster(MsPlot):
                 vis_axis_selector.value = VIS_AXIS_OPTIONS[0]
 
             # Update options for selection selector
-            selection_selectors = self._get_selector('sel')
+            selection_selectors = self._get_selector('selection')
             self._update_ps_selection_options(selection_selectors[0][0])
             self._update_ms_selection_options(selection_selectors[0][1])
 
@@ -747,20 +751,15 @@ class MsRaster(MsPlot):
         ''' Callback to start spinner when Plot button clicked. '''
         if self._panel:
             # Start spinner
-            spinner = self._panel[4][2][1]
+            spinner = self._panel[4][0][1][1]
             spinner.value = plot_clicked
 
     def _update_plot_status(self, plot_changed):
         ''' Change button color when plot inputs change. '''
         if self._panel:
             # Set button color
-            button = self._panel[4][2][0]
+            button = self._panel[4][0][1][0]
             button.button_style = 'solid' if plot_changed else 'outline'
-
-    def _show_plot_inputs(self):
-        ''' Show inputs for raster plot in column in GUI tab '''
-        inputs_column = self._panel[1]
-        super()._fill_inputs_column(inputs_column)
 
     ###
     ### Callbacks for widgets which update plot inputs
