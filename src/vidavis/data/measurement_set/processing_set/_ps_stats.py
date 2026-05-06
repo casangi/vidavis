@@ -17,7 +17,7 @@ try:
 except ImportError:
     _HAVE_TOOLVIPER = False
 
-from vidavis.data.measurement_set.processing_set._xds_data import get_correlated_data, get_axis_data
+from vidavis.data.measurement_set.processing_set._xds_data import get_group_correlated_data, get_group_flag, get_axis_data
 
 def calculate_ps_stats(ps_xdt, ps_store, vis_axis, data_group, logger):
     '''
@@ -34,7 +34,8 @@ def calculate_ps_stats(ps_xdt, ps_store, vis_axis, data_group, logger):
     input_params['data_group'] = data_group
     for ms_xdt in ps_xdt.values():
         if data_group in ms_xdt.attrs['data_groups']:
-            input_params['correlated_data'] = get_correlated_data(ms_xdt.ds, data_group)
+            input_params['correlated_data'] = get_group_correlated_data(ms_xdt.ds, data_group)
+            input_params['flag'] = get_group_flag(ms_xdt.ds, data_group)
             break
 
     if _HAVE_TOOLVIPER:
@@ -101,11 +102,11 @@ def _calc_stddev(ps_xdt, mapping, input_params, logger):
     logger.debug(f"stats: variance={data_variance:.4f}, stddev={data_stddev:.4f}")
     return data_stddev
 
-def _get_stats_xda(xds, vis_axis, data_group):
+def _get_stats_xda(xds, vis_axis, data_group, flag):
     ''' Return xda with only unflagged cross-corr visibility data '''
     # apply flags to get unflagged vis data
     xda = get_axis_data(xds, vis_axis, data_group)
-    unflagged_xda = xda.where(np.logical_not(xds.FLAG))
+    unflagged_xda = xda.where(np.logical_not(xds[flag]))
 
     if unflagged_xda.count() > 0 and "baseline_antenna1_name" in unflagged_xda.coords:
         # if unflagged data, remove autocorrelation baselines
@@ -124,6 +125,7 @@ def _map_stats(input_params):
     vis_axis = input_params['vis_axis']
     data_group = input_params['data_group']
     correlated_data = input_params['correlated_data']
+    flag = input_params['flag']
     min_vals = []
     max_vals = []
     sum_vals = []
@@ -134,12 +136,12 @@ def _map_stats(input_params):
         input_params['input_data_store'],
         input_params['xdt'],
         input_params['data_group'],
-        include_variables=[correlated_data, 'FLAG'],
+        include_variables=[correlated_data, flag],
         load_sub_datasets=False
     )
 
     for xds in ps_iter:
-        xda = _get_stats_xda(xds, vis_axis, data_group)
+        xda = _get_stats_xda(xds, vis_axis, data_group, flag)
         if xda.count() > 0:
             xda_data = xda.values.ravel()
             try:
@@ -186,6 +188,7 @@ def _map_variance(input_params):
     vis_axis = input_params['vis_axis']
     data_group = input_params['data_group']
     correlated_data = input_params['correlated_data']
+    flag = input_params['flag']
     mean = input_params['mean']
 
     sq_diff_sum = 0.0
@@ -196,12 +199,12 @@ def _map_variance(input_params):
         input_params['input_data_store'],
         input_params['xdt'],
         input_params['data_group'],
-        include_variables=[correlated_data, 'FLAG'],
+        include_variables=[correlated_data, flag],
         load_sub_datasets=False
     )
 
     for xds in ps_iter:
-        xda = _get_stats_xda(xds, vis_axis, data_group)
+        xda = _get_stats_xda(xds, vis_axis, data_group, flag)
         if xda.size > 0:
             sq_diff = (xda - mean) ** 2
             sq_diff_sum += np.nansum(sq_diff)

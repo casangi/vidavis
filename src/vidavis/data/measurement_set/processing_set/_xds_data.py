@@ -6,9 +6,13 @@ import xarray as xr
 
 from vidavis.plot.ms_plot._ms_plot_constants import SPECTRUM_AXIS_OPTIONS, UVW_AXIS_OPTIONS, VIS_AXIS_OPTIONS, WEIGHT_AXIS_OPTIONS
 
-def get_correlated_data(xds, data_group):
-    ''' Return correlated_data value in data_group dict '''
+def get_group_correlated_data(xds, data_group):
+    ''' Return correlated_data name in data_group '''
     return xds.attrs['data_groups'][data_group]['correlated_data']
+
+def get_group_flag(xds, data_group):
+    ''' Return flag name in data_group '''
+    return xds.attrs['data_groups'][data_group]['flag']
 
 def get_axis_data(xds, axis, data_group=None):
     ''' Get requested axis data from xarray dataset.

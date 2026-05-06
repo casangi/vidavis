@@ -49,7 +49,6 @@ def get_processing_set(ms_path, logger):
 
     ps = open_processing_set(zarr_path)
     if not ps or len(ps) == 0:
-        raise RuntimeError("Failed to read measurement set into processing set.")
-    logger.info(f"Processing set contains {len(ps)} msv4 datasets.")
+        raise RuntimeError("Failed to read ms or zarr file into processing set.")
 
     return ps, zarr_path

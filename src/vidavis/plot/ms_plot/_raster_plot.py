@@ -9,7 +9,7 @@ import hvplot.pandas
 # pylint: enable=unused-import
 
 from vidavis.data.measurement_set.processing_set._ps_coords import set_index_coordinates
-from vidavis.data.measurement_set.processing_set._xds_data import get_correlated_data
+from vidavis.data.measurement_set.processing_set._xds_data import get_group_correlated_data, get_group_flag
 from vidavis.plot.ms_plot._time_ticks import get_time_formatter
 from vidavis.plot.ms_plot._xds_plot_axes import get_axis_labels, get_vis_axis_labels, get_coordinate_labels
 
@@ -55,7 +55,8 @@ class RasterPlot:
         '''
         data_group = plot_inputs['data_group']
         self._plot_params['data']['data_group'] = data_group
-        self._plot_params['data']['correlated_data'] = get_correlated_data(data, data_group)
+        self._plot_params['data']['correlated_data'] = get_group_correlated_data(data, data_group)
+        self._plot_params['data']['flag'] = get_group_flag(data, data_group)
         self._plot_params['data']['aggregator'] = plot_inputs['aggregator']
 
         color_mode = plot_inputs['color_mode']
@@ -85,6 +86,7 @@ class RasterPlot:
         ''' Remove and invalidate data plot params '''
         self._plot_params['plot'] = {'params': False}
 
+# pylint: disable=too-many-locals
     def raster_plot(self, data, logger, is_gui=False):
         ''' Create raster plot (hvPlot) for input data (xarray Dataset) using plot params.
             Returns Overlay of unflagged and flagged plots.
@@ -104,22 +106,27 @@ class RasterPlot:
 
         # Set plot axes to numeric coordinates if needed
         xds = set_index_coordinates(data, (axis_labels['x']['axis'], axis_labels['y']['axis']))
-        xda = xds[data_params['correlated_data']].rename(xda_name)
+
+        # Use data and flag xdas in data group
+        vis_xda = xds[data_params['correlated_data']].rename(xda_name)
+        flag_xda = xds[data_params['flag']]
+        logger.info(f"Plotting data group {data_params['data_group']} with correlated data {data_params['correlated_data']} and flag {data_params['flag']}")
 
         # Calculate data range for flagged and unflagged data for color limits
-        unflagged_xda = xda.where(xds.FLAG == 0.0)
-        flagged_xda = xda.where(xds.FLAG == 1.0).rename("flagged " + xda_name)
+        unflagged_xda = vis_xda.where(flag_xda == 0.0)
+        flagged_xda = vis_xda.where(flag_xda == 1.0).rename("flagged " + xda_name)
         unflagged_data_range = (unflagged_xda.min().values.item(), unflagged_xda.max().values.item())
         flagged_data_range = (flagged_xda.min().values.item(), flagged_xda.max().values.item())
-        if is_gui: # update data range for colorbar
+        if is_gui: # update data range for colorbar range selector
             self._plot_params['data']['data_range'] = unflagged_data_range
 
-        # Plot all data as unflagged (with hover tool), then overlay flagged data
-        unflagged_plot = self._plot_xda(xda, False, unflagged_data_range)
+        # Plot all visibility data as unflagged (with hover tool), then overlay flagged data
+        unflagged_plot = self._plot_xda(vis_xda, False, unflagged_data_range)
         flagged_plot = self._plot_xda(flagged_xda, True, flagged_data_range)
 
         # Make Overlay plot
         return unflagged_plot.opts(tools=['hover']) * flagged_plot.opts(tools=[])
+# pylint: enable=too-many-locals
 
     def _get_plot_title(self, data, plot_inputs, ms_name):
         ''' Form string containing ms name and selected values using data (xArray Dataset) '''
