@@ -9,7 +9,7 @@ from xradio.measurement_set._utils._utils.stokes_types import stokes_types
 from vidavis.data.measurement_set.processing_set._ps_concat import concat_ps_xdt
 from vidavis.data.measurement_set.processing_set._ps_coords import set_datetime_coordinate
 from vidavis.data.measurement_set.processing_set._ps_select import select_ms
-from vidavis.data.measurement_set.processing_set._xds_data import get_correlated_data, get_axis_data
+from vidavis.data.measurement_set.processing_set._xds_data import get_group_correlated_data, get_axis_data
 
 def raster_data(ps_xdt, plot_inputs, logger):
     '''
@@ -25,7 +25,7 @@ def raster_data(ps_xdt, plot_inputs, logger):
     raster_xds = concat_ps_xdt(raster_xdt, logger)
 
     data_group = plot_inputs['data_group']
-    correlated_data = get_correlated_data(raster_xds, data_group)
+    correlated_data = get_group_correlated_data(raster_xds, data_group)
     if raster_xds[correlated_data].count() == 0:
         raise RuntimeError("Plot failed: raster plane selection yielded data with all nan values.")
 
@@ -41,9 +41,9 @@ def raster_data(ps_xdt, plot_inputs, logger):
     logger.debug(f"Plotting visibility data with shape: {dict(raster_xds[correlated_data].sizes)}")
     return raster_xds
 
-def _select_ms(ps_xdt, logger, **selection):
+def _select_ms_dimensions(ps_xdt, **dim_selection):
     ''' Select ProcessingSet MeasurementSets for raster data. '''
-    return select_ms(ps_xdt, logger, indexers=None, method=None, tolerance=None, **selection)
+    return select_ms(ps_xdt, indexers=None, method=None, tolerance=None, drop=False, **dim_selection)
 
 def _select_raster_dimensions(ps_xdt, plot_inputs, logger):
     ''' Select default dimensions if needed for raster data '''
@@ -52,25 +52,22 @@ def _select_raster_dimensions(ps_xdt, plot_inputs, logger):
     if not dims_to_select:
         return ps_xdt
 
-    selection = plot_inputs['selection'] if 'selection' in plot_inputs else None
+    ms_selection = plot_inputs['ms_selection'] if 'ms_selection' in plot_inputs else None
     dim_selection = {}
 
     for dim in dims_to_select:
         # Select first value (by index) and add to dim selection, or apply iter_axis value
-        if not selection or dim not in selection:
+        if not ms_selection or dim not in ms_selection:
             dim_selection[dim] = _get_first_dim_value(ps_xdt, dim, plot_inputs, logger)
         elif 'iter_axis' in plot_inputs and dim == plot_inputs['iter_axis']:
-            dim_selection[dim] = selection[dim]
-        elif selection and dim in selection and isinstance(selection[dim], list):
-            dim_selection[dim] = selection[dim][0]
+            dim_selection[dim] = ms_selection[dim]
+        elif ms_selection and dim in ms_selection and isinstance(ms_selection[dim], list):
+            dim_selection[dim] = ms_selection[dim][0]
 
     if dim_selection:
-        # Remove from selection for next plot
-        if 'iter_axis' in plot_inputs and plot_inputs['iter_axis']:
-            selection.pop(plot_inputs['iter_axis'])
         logger.info(f"Applying raster plane selection (using first index or iter value): {dim_selection}")
         plot_inputs['dim_selection'] = dim_selection
-        return _select_ms(ps_xdt, logger, **dim_selection)
+        return _select_ms_dimensions(ps_xdt, **dim_selection)
     return ps_xdt
 
 def _get_raster_selection_dims(plot_inputs):
@@ -94,7 +91,7 @@ def _get_first_dim_value(ps_xdt, dim, plot_inputs, logger):
         iter_axis = plot_inputs['iter_axis']
         iter_selection = {iter_axis: plot_inputs['selection'][iter_axis]}
         logger.debug(f"Applying {iter_axis} iter_axis selection to select first {dim} value")
-        iter_ps = _select_ms(ps_xdt, logger, **iter_selection)
+        iter_ps = select_ms(ps_xdt, None, None, None, False, **iter_selection)
 
     values = []
     if dim == "polarization":

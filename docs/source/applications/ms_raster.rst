@@ -723,6 +723,80 @@ in the **Locate Points** tab:
 
 .. _save_plot:
 
+Flag Plot Data
+````````````````
+When points and/or boxes are drawn on the plot and located, as described in
+:ref:`locate_data`, these point and box regions may be selected for flagging.
+Once the data in the regions have been located in the corresponding Locate tabs,
+the **Flag Data** button at the lower left will be enabled (signified by a solid
+button rather than an outline):
+
+.. image:: _static/msraster_flag_enable.png
+
+When the **Flag Data** button is clicked, a dialog is opened on the plot for the
+flagging parameters. This dialog box may be dragged anywhere in the browser
+tab, and using the control buttons in the upper right, may be (in left to right
+order) collapsed, minimized, maximized, or closed.
+
+.. image:: _static/msraster_flag_dialog.png
+
+The drawn regions may be selected for flagging by checking the box next to a
+point or box. The hover tool may be used if needed to identify each point or
+box on the plot. After one or more regions are selected, input a **Flag Name**
+where indicated. This flag name is required and will be used to name a new data
+variable with the new flags, by prepending *FLAG_* with the *uppercase* **Flag
+Name**; for example, if the name *test* is entered, the new flags will be
+*FLAG_TEST*.
+
+In addition, a new data group will be created from the data group selected for
+the plot, with the *lowercase* **Flag Name**. In this example, a data group
+*test* will be created with the 'flag' key set to *FLAG_TEST*. In addition, the
+data group 'date' key will be updated with the current date and time. If the
+optional **Description** is entered, the data group 'description' will be set to
+this input, else left blank.
+
+When ready to flag, click the **Flag** button. If the new flag data variable
+name exists in the ProcessingSet, an error will pop up and another name may be
+entered. Otherwise, the current flags are copied to the **Flag Name** as
+described above, the flags are set according to the region selection, and the
+data group is created. The new flags and data group are written to the zarr file
+on disk, and a popup notification will indicate the flagging was a success. Then
+the dialog is closed and the new data group is automatically selected and
+plotted, as indicated in the *data_group* listed in the **Plot Inputs** tab.
+Note that in the cursor location box, the flag value is listed with the new
+label *FLAG_TEST*.
+
+.. image:: _static/msraster_flag_plot.png
+
+
+In the Python console, the data groups now include the new *test* group::
+
+    >>> msr.data_groups(True)
+    base :
+        correlated_data = VISIBILITY
+        date = 2026-04-29T15:05:27.754696+00:00
+        description = Data group derived from the data column 'VISIBILITY' of an MSv2 converted to MSv4
+        field_and_source = field_and_source_base_xds
+        flag = FLAG
+        uvw = UVW
+        weight = WEIGHT
+    test :
+        correlated_data = VISIBILITY
+        flag = FLAG_TEST
+        weight = WEIGHT
+        uvw = UVW
+        field_and_source = field_and_source_base_xds
+        description = Test manual flags from base group
+        date = 2026-05-06T21:27:02.689427+00:00
+
+To go back to the original flags in the *base* data group, simply clear the
+selection and select this data group:
+
+    >>> msr.clear_selection()
+    >>> msr.select_ps(data_group_name='base')
+    >>> msr.plot()
+    >>> msr.show()
+
 Save Raster Plot
 ````````````````
 

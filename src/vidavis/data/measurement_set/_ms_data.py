@@ -180,6 +180,20 @@ class MsData:
         self._log_no_ms()
         return None
 
+    def flag_name_exists(self, flag_name):
+        ''' Check if data variable with flag_name exists in data '''
+        if self._data_initialized:
+            return self._data.flag_name_exists(flag_name)
+        self._log_no_ms()
+        return False
+
+    def flag_data(self, src_group_name, flag_selection, flag_name, description):
+        ''' Flag selection in source data group flags, using flag_name for new data variable and data group '''
+        if self._data_initialized:
+            self._data.flag_data(src_group_name, flag_selection, flag_name, description)
+        else:
+            self._log_no_ms()
+
     def _log_no_ms(self):
         ''' Standardized log message when path has not been set. '''
         self._logger.info("No MS path set, cannot access data")

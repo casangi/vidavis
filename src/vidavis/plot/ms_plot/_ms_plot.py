@@ -17,9 +17,12 @@ from selenium import webdriver
 from toolviper.utils.logger import setup_logger
 
 from vidavis.data.measurement_set._ms_data import MsData
-from vidavis.plot.ms_plot._locate_points import get_locate_value, get_new_data, update_cursor_location, update_points_location, update_boxes_location
+from vidavis.plot.ms_plot._locate_points import get_locate_value, format_value, get_new_data, update_cursor_location, update_points_location, update_boxes_location
+from vidavis.plot.ms_plot._locate_flag_points import get_flag_value, get_flag_range
 from vidavis.plot.ms_plot._raster_plot_gui import get_panel_tabs
 from vidavis.toolbox import AppContext
+
+pn.extension('floatpanel')
 
 class MsPlot:
 
@@ -48,7 +51,7 @@ class MsPlot:
         self._app_context = AppContext(app_name)
 
         # Initialize plot inputs and params
-        self._plot_inputs = None # object to manage plot inputs
+        self._plot_inputs = None # RasterPlotInputs object
 
         # Initialize plots
         self._plot_init = False
@@ -56,11 +59,11 @@ class MsPlot:
         self._last_plot = None
         self._plot_params = [] # for plot inputs tab
 
-        if show_gui:
-            # Enable "toast" notifications
-            pn.config.notifications = True
-            self._toast = None # for destroy() with new plot or new notification
+        # Enable "toast" notifications
+        pn.config.notifications = True
+        self._toast = None # for destroy() with new plot or new notification
 
+        if show_gui:
             self._gui_selection = {}
             self._last_plot_inputs = None
             self._last_style_inputs = None
@@ -154,7 +157,7 @@ class MsPlot:
         ''' Clear data selection and restore original ProcessingSet '''
         if self._ms_data:
             self._ms_data.clear_selection()
-        self._plot_inputs.remove_input('selection')
+        self._plot_inputs.remove('selection')
 
     def show(self):
         ''' 
@@ -164,7 +167,7 @@ class MsPlot:
             raise RuntimeError("No plots to show.  Run plot() to create plot.")
 
         # Single plot or combine plots into layout using subplots (rows, columns)
-        subplots = self._plot_inputs.get_input('subplots')
+        subplots = self._plot_inputs.get('subplots')
         plot = self._layout_plots(subplots)
 
         # Show plots and plot inputs in tabs
@@ -177,7 +180,7 @@ class MsPlot:
         else:
             # Add DynamicMap for streams for single plot
             dmaps = self._get_locate_dmaps()
-            self._panel = get_panel_tabs(plot * dmaps)
+            self._panel = get_panel_tabs(plot * dmaps, self._set_flag_data)
             self._fill_inputs_column()
 
             # Compute coordinate values for locate
@@ -213,13 +216,13 @@ class MsPlot:
 
         # Combine plots into layout using subplots (rows, columns) if not single plot.
         # Set fixed size for export.
-        subplots = self._plot_inputs.get_input('subplots')
+        subplots = self._plot_inputs.get('subplots')
         plot = self._layout_plots(subplots, (width, height))
 
-        iter_axis = self._plot_inputs.get_input('iter_axis')
+        iter_axis = self._plot_inputs.get('iter_axis')
         if not isinstance(plot, hv.Layout) and iter_axis:
             # Save iterated plots individually, with index appended to filename
-            iter_range = self._plot_inputs.get_input('iter_range')
+            iter_range = self._plot_inputs.get('iter_range')
             plot_idx = 0 if iter_range is None else iter_range[0]
             for plot in self._plots:
                 exportname = f"{name}_{plot_idx}{ext}"
@@ -312,30 +315,30 @@ class MsPlot:
     def _notify(self, message, level, duration=3000):
         ''' Log message. If show_gui, notify user with toast for duration in ms.
             Zero duration must be dismissed. '''
-        if self._show_gui:
+        if self._panel:
             pn.state.notifications.position = 'top-center'
             if self._toast:
                 self._toast.destroy()
 
         if level == "info":
             self._logger.info(message)
-            if self._show_gui:
+            if self._panel:
                 self._toast = pn.state.notifications.info(message, duration=duration)
         elif level == "error":
             self._logger.error(message)
-            if self._show_gui:
+            if self._panel:
                 self._toast = pn.state.notifications.error(message, duration=duration)
         elif level == "success":
             self._logger.info(message)
-            if self._show_gui:
+            if self._panel:
                 self._toast = pn.state.notifications.success(message, duration=duration)
         elif level == "warning":
             self._logger.warning(message)
-            if self._show_gui:
+            if self._panel:
                 self._toast = pn.state.notifications.warning(message, duration=duration)
 
     def _set_plot_params(self, plot_params):
-        ''' Set list of plot parameters as key=value string, for logging or browser display '''
+        ''' Set dict of plot parameters, for logging or browser display '''
         plot_inputs = plot_params.copy()
         for key in ['self', '__class__', 'data_dims']:
             # Remove keys from using function locals()
@@ -347,14 +350,18 @@ class MsPlot:
             self._plot_params = plot_inputs
         else:
             for param, value in self._plot_params.items():
+                # Set plot param if plot input has changed
                 if plot_inputs[param] != value:
                     if isinstance(value, list):
                         # append new value to existing list if not repeat
                         if plot_inputs[param] != value[-1]:
                             value.append(plot_inputs[param])
                     else:
-                        # make list to include new value
-                        value = [value, plot_inputs[param]]
+                        if param == "data_group":
+                            value = plot_inputs[param]
+                        else:
+                            # make list to include new value
+                            value = [value, plot_inputs[param]]
                     self._plot_params[param] = value
 
     def _fill_inputs_column(self):
@@ -394,7 +401,7 @@ class MsPlot:
             streams=[hv.streams.BoxEdit(source=boxes)]
         )
         return (cursor_dmap * points_dmap * points * box_dmap * boxes).options(
-            hv.opts.Rectangles(fill_alpha=0.5, line_color='white'),
+            hv.opts.Rectangles(fill_alpha=0.2, line_color='white'),
             hv.opts.Points(size=5, fill_color='white')
         )
 
@@ -411,9 +418,9 @@ class MsPlot:
     def _get_plot_axes(self):
         ''' Return x, y, vis axes '''
         if not self._plot_axes:
-            x_axis = self._plot_inputs.get_input('x_axis')
-            y_axis = self._plot_inputs.get_input('y_axis')
-            vis_axis = self._plot_inputs.get_input('vis_axis')
+            x_axis = self._plot_inputs.get('x_axis')
+            y_axis = self._plot_inputs.get('y_axis')
+            vis_axis = self._plot_inputs.get('vis_axis')
             self._plot_axes = (x_axis, y_axis, vis_axis)
         return self._plot_axes
 
@@ -430,8 +437,11 @@ class MsPlot:
         plot_axes = self._get_plot_axes()
         x = get_locate_value(self._plot_data, plot_axes[0], x)
         y = get_locate_value(self._plot_data, plot_axes[1], y)
+
+        # Show cursor location
+        data_group = self._plot_params['data_group']
         cursor = (x, y)
-        update_cursor_location(cursor, plot_axes, self._plot_data, self._panel[0][1])
+        update_cursor_location(cursor, plot_axes, data_group, self._plot_data, self._panel[0][1][1])
         return points
 
     def _locate_points(self, data):
@@ -441,7 +451,10 @@ class MsPlot:
         points = hv.Points([])
 
         if not self._plot_data or not data or len(data['x']) == 0:
+            self._last_points = []
+            self._update_flag_button()
             return points
+
 
         # Normalize points to plot data values
         plot_axes = self._get_plot_axes()
@@ -454,6 +467,7 @@ class MsPlot:
         data_points = list(zip(data['x'], data['y']))
         points_to_locate = get_new_data(data_points, self._last_points)
         self._last_points = data_points
+        self._update_flag_button()
 
         if not points_to_locate: # point deleted
             return points
@@ -464,7 +478,8 @@ class MsPlot:
             points_tab.clear()
 
         # Locate points
-        location_info = update_points_location(points_to_locate, plot_axes, self._plot_data, points_tab)
+        data_group = self._plot_params['data_group']
+        location_info = update_points_location(points_to_locate, plot_axes, data_group, self._plot_data, points_tab)
         self._log_to_file_only(location_info)
         return points
 
@@ -475,8 +490,11 @@ class MsPlot:
         boxes = hv.Rectangles([])
 
         if not self._plot_data or not data:
+            self._last_boxes = []
+            self._update_flag_button()
             return boxes
 
+        # Normalize points to plot data values
         plot_axes = self._get_plot_axes()
         x0_vals = data['x0']
         y0_vals = data['y0']
@@ -491,6 +509,7 @@ class MsPlot:
         box_list = list(zip(data['x0'], data['y0'], data['x1'], data['y1']))
         boxes_to_locate = get_new_data(box_list, self._last_boxes)
         self._last_boxes = box_list
+        self._update_flag_button()
 
         if not boxes_to_locate: # box deleted
             return boxes
@@ -498,7 +517,8 @@ class MsPlot:
         # Locate box
         box_tab = self._panel[3]
         box_tab.clear() # only locate points in new boxes
-        location_info = update_boxes_location(boxes_to_locate, plot_axes, self._plot_data, box_tab)
+        data_group = self._plot_params['data_group']
+        location_info = update_boxes_location(boxes_to_locate, plot_axes, data_group, self._plot_data, box_tab)
         self._log_to_file_only(location_info)
         return boxes
 
@@ -508,3 +528,87 @@ class MsPlot:
         for message in messages:
             self._logger.info(message)
         self._logger.addHandler(self._stdout_handler)
+
+    def _update_flag_button(self):
+        ''' Enable or disable flag data button if points or boxes exist '''
+        disable = (not self._last_points or len(self._last_points) == 0) and (not self._last_boxes or len(self._last_boxes) == 0)
+        self._panel[0][1][0].disabled = disable
+        self._panel[0][1][0].button_style = 'outline' if disable else 'solid'
+
+# pylint: disable=unused-argument
+    def _set_flag_data(self, event):
+        ''' Callback for flag data button: dialog to select regions, input name and description for flags '''
+        # Check boxes for points and boxes
+        points = [f"Point: ({format_value(point[0])}, {format_value(point[1])})" for point in self._last_points]
+        boxes = [f"Box: ({format_value(box[0])}, {format_value(box[1])}), ({format_value(box[2])}, {format_value(box[3])})" for box in self._last_boxes]
+        region_selection = pn.widgets.CheckBoxGroup(options=points+boxes, inline=False)
+
+        # Floating panel to select regions, input text, and button with callback
+        flag_panel = pn.layout.FloatPanel("Select regions to flag:", name="Flag Data", contained=False, position='center')
+        flag_panel.append(region_selection)
+        name_input = pn.widgets.TextInput(name="Flag Name", placeholder="Enter name for new flags")
+        flag_panel.append(name_input)
+        description_input = pn.widgets.TextInput(name="Description (optional)", placeholder="Enter flagging description")
+        flag_panel.append(description_input)
+        flag_button = pn.widgets.Button(button_style='solid', button_type='primary', name='Flag')
+        flag_panel.append(flag_button)
+        flag_callback = pn.bind(self._flag_data, region_selection, name_input, description_input, flag_button)
+        flag_panel.append(flag_callback)
+
+        # Show flag panel by appending to first tab
+        self._panel[0].append(flag_panel)
+# pylint: enable=unused-argument
+
+# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+    def _flag_data(self, selection, name, description, do_flag):
+        ''' Callback to flag data in selected point and box regions, using flag name and description '''
+        # Must have selection, flag name, and flag button click to do any flagging
+        if not do_flag:
+            return
+
+        if not selection:
+            self._notify("Cannot set flags with no selected region", "warning")
+            return
+
+        if not name:
+            self._notify("Cannot save flags with no flag name", "warning")
+            return
+
+        flag_name = name.upper()
+        if self._ms_data.flag_name_exists("FLAG_" + flag_name):
+            self._notify(f"Cannot save flags with existing flag name: FLAG_{flag_name}", "warning")
+            return
+
+        # Write flags to xarray Dataset
+        x_axis, y_axis, _ = self._get_plot_axes()
+        src_data_group = self._plot_inputs.get('data_group')
+        dim_selection = self._plot_inputs.get('dim_selection') # auto selection when not in user selection
+        flag_selection = dim_selection.copy() if dim_selection else {}
+
+        for sel in selection:
+            if sel.startswith("Point:"):
+                x, y = sel[8: -1].split(',')
+                flag_selection[x_axis] = get_flag_value(self._plot_data, x_axis, x)
+                flag_selection[y_axis] = get_flag_value(self._plot_data, y_axis, y)
+            else: # Box
+                x0, y0, x1, y1 = sel[6: -1].split(',')
+                flag_selection[x_axis] = get_flag_range(self._plot_data, x_axis, x0, x1[2:])
+                flag_selection[y_axis] = get_flag_range(self._plot_data, y_axis, y0[:-1], y1)
+            self._ms_data.flag_data(src_data_group, flag_selection, flag_name, description)
+
+        flag_data_group = name.lower()
+        self._notify(f"Flags saved to: FLAG_{flag_name}. Plotting data group: {flag_data_group}.", "success")
+
+        # Plot new flags in plot inputs
+        self._plot_inputs.set('data_group', flag_data_group)
+        flagged_plot = self._do_plot()
+        self._logger.info("Plot updated with new flags")
+        dmaps = self._get_locate_dmaps()
+        self._panel[0][0].object = flagged_plot * dmaps
+
+        # Update plot inputs
+        self._fill_inputs_column()
+
+        # Close flag panel
+        self._panel[0].pop()
+# pylint: enable=too-many-arguments, too-many-positional-arguments, too-many-locals

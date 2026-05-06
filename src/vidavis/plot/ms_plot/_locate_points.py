@@ -10,11 +10,12 @@ import panel as pn
 
 from vidavis.plot.ms_plot._ms_plot_constants import TIME_FORMAT
 
+index_coords = {'baseline': 'baseline_name', 'antenna_name': 'antenna', 'polarization': 'polarization_name'}
+
 def get_locate_value(xds, coord, value):
-    ''' Convert index coordinates to int and float time coordinate to datetime. Select nearest value <= value. '''
-    if coord in ['baseline', 'antenna_name', 'polarization']:
-        # Convert float to int index value
-        return round(value)
+    ''' Convert index coordinates to int and float time coordinate to datetime. Select nearest numeric value. '''
+    if isinstance(value, str):
+        value = _str_to_value(coord, value)
 
     if coord in ['time', 'frequency']:
         if coord=='time' and isinstance(value, float):
@@ -25,6 +26,21 @@ def get_locate_value(xds, coord, value):
         nearest_value = xds[coord].sel(indexers=None, method='nearest', tolerance=None, drop=False, **value_sel).values
         return nearest_value
 
+    return value
+
+def format_value(value):
+    ''' Format numeric and datetime values '''
+    if not isinstance(value, str):
+        # Format numeric and datetime values
+        if isinstance(value, float):
+            if np.isnan(value):
+                value = "nan"
+            elif value < 1e6:
+                value = f"{value:.4f}"
+            else:
+                value = f"{value:.4e}"
+        elif isinstance(value, np.datetime64):
+            value = to_datetime(np.datetime_as_string(value)).strftime(TIME_FORMAT)
     return value
 
 def get_new_data(data, last_data):
@@ -38,7 +54,7 @@ def get_new_data(data, last_data):
         new_data = data
     return new_data
 
-def update_cursor_location(cursor, plot_axes, xds, cursor_locate_box):
+def update_cursor_location(cursor, plot_axes, data_group, xds, cursor_locate_box):
     ''' Show data values for cursor x,y position in cursor location box (pn.WidgetBox) '''
     # Convert plot values to selection values to select plot data
     cursor_locate_box.clear()
@@ -46,7 +62,7 @@ def update_cursor_location(cursor, plot_axes, xds, cursor_locate_box):
     x_axis, y_axis, vis_axis = plot_axes
 
     cursor_position = {x_axis: x, y_axis: y}
-    cursor_location = _locate_point(xds, cursor_position, vis_axis)
+    cursor_location = _locate_point(xds, cursor_position, vis_axis, data_group)
 
     # Add row of columns to column layout
     location_column = pn.Column(pn.widgets.StaticText(name="CURSOR LOCATION"))
@@ -56,14 +72,14 @@ def update_cursor_location(cursor, plot_axes, xds, cursor_locate_box):
     # Add location column to widget box
     cursor_locate_box.append(location_column)
 
-def update_points_location(points, plot_axes, xds, points_tab_feed):
+def update_points_location(points, plot_axes, data_group, xds, points_tab_feed):
     ''' Show data values for points in point_draw in tab and log '''
     locate_log = []
     x_axis, y_axis, vis_axis = plot_axes
     for point in points:
         # Locate point
         point_position = {x_axis: point[0], y_axis: point[1]}
-        point_location = _locate_point(xds, point_position, vis_axis)
+        point_location = _locate_point(xds, point_position, vis_axis, data_group)
 
         # Format location and add to points locate column
         location_layout = _layout_point_location(point_location)
@@ -76,13 +92,13 @@ def update_points_location(points, plot_axes, xds, points_tab_feed):
     return locate_log
 
 # pylint: disable=too-many-locals
-def update_boxes_location(boxes, plot_axes, xds, box_tab_feed):
+def update_boxes_location(boxes, plot_axes, data_group, xds, box_tab_feed):
     ''' Show data values for points in box_select in tab and log '''
     locate_log = []
     x_axis, y_axis, vis_axis = plot_axes
     for box in boxes:
         box_bounds = {x_axis: (box[0], box[2]), y_axis: (box[1], box[3])}
-        npoints, point_locations = _locate_box(xds, box_bounds, vis_axis)
+        npoints, point_locations = _locate_box(xds, box_bounds, vis_axis, data_group)
 
         message = f"Locate {npoints} points"
         message += " (only first 100 shown):" if npoints > 100 else ":"
@@ -101,20 +117,20 @@ def update_boxes_location(boxes, plot_axes, xds, box_tab_feed):
     return locate_log
 # pylint: enable=too-many-locals
 
-def _locate_point(xds, position, vis_axis):
+def _locate_point(xds, position, vis_axis, data_group):
     '''
         Get cursor location as values of coordinates and data vars.
             xds (Xarray Dataset): data for plot
             position (dict): {coordinate: value} of x and y axis positions
             vis_axis (str): visibility component of complex value
+            data_group (str): data group name selected for plot
         Returns:
             list of pn.widgets.StaticText(name, value) with value formatted for its type
     '''
     static_text_list = []
-    values, units = _get_point_location(xds, position, vis_axis)
+    values, units = _get_point_location(xds, position, vis_axis, data_group)
 
     # List indexed coordinate int value with with str value
-    index_coords = {'baseline': 'baseline_name', 'antenna_name': 'antenna', 'polarization': 'polarization_name'}
     for name, value in values.items():
         if name in index_coords.values():
             continue
@@ -124,12 +140,14 @@ def _locate_point(xds, position, vis_axis):
         static_text_list.append(static_text)
     return static_text_list
 
-def _locate_box(xds, bounds, vis_axis):
+# pylint: disable=too-many-locals
+def _locate_box(xds, bounds, vis_axis, data_group):
     '''
         Get location of each point in box bounds as values of coordinate and data vars.
             xds (Xarray Dataset): data for plot
             bounds (dict): {coordinate: (start, end)} of x and y axis ranges
             vis_axis (str): visibility component of complex value
+            data_group (str): data group name selected for plot
         Returns:
             list of list of pn.widgets.StaticText(name, value), one list per point.
     '''
@@ -152,7 +170,7 @@ def _locate_box(xds, bounds, vis_axis):
             for y in sel_xds[y_coord].values:
                 for x in sel_xds[x_coord].values:
                     position = {x_coord: x, y_coord: y}
-                    points.append(_locate_point(sel_xds, position, vis_axis))
+                    points.append(_locate_point(sel_xds, position, vis_axis, data_group))
                     counter += 1
                     if counter == 100:
                         break
@@ -162,11 +180,12 @@ def _locate_box(xds, bounds, vis_axis):
             pass
     return npoints, points
 
-def _get_point_location(xds, position, vis_axis):
+def _get_point_location(xds, position, vis_axis, data_group):
     ''' Select plot data xds with point x, y position, and return coord and data_var values describing the location.
             xds (Xarray Dataset): data for plot
             position (dict): {coordinate: value} of x and y axis positions
             vis_axis (str): visibility component of complex value
+            data_group (str): data group name selected for plot
         Returns:
             values (dict): {name: value} for each location item
             units (dict): {name: unit} for each value which has a unit defined.
@@ -175,6 +194,7 @@ def _get_point_location(xds, position, vis_axis):
     units = {}
 
     if xds:
+        flag_name = xds.attrs['data_groups'][data_group]['flag']
         try:
             sel_xds = xds.sel(indexers=None, method='nearest', tolerance=None, drop=False, **position)
             for coord in sel_xds.coords:
@@ -185,6 +205,8 @@ def _get_point_location(xds, position, vis_axis):
                 units[coord] = unit
             for data_var in sel_xds.data_vars:
                 if 'TIME_CENTROID' in data_var:
+                    continue
+                if 'FLAG' in data_var and data_var != flag_name:
                     continue
                 val, unit = _get_xda_val_unit(sel_xds[data_var])
                 if data_var == 'UVW':
@@ -199,9 +221,11 @@ def _get_point_location(xds, position, vis_axis):
             pass
 
     # Set complex component name for visibilities
-    if 'VISIBILITY' in values:
-        values[vis_axis.upper()] = values.pop('VISIBILITY')
+    vis_name = xds.attrs['data_groups'][data_group]['correlated_data']
+    if vis_name in values:
+        values[vis_axis.upper()] = values.pop(vis_name)
     return values, units
+# pylint: enable=too-many-locals
 
 def _get_xda_val_unit(xda):
     ''' Return value and unit of xda (selected so only one value) '''
@@ -211,32 +235,24 @@ def _get_xda_val_unit(xda):
         value = value.item()
 
     # Unit
-    try:
-        unit = xda.attrs['units']
-        unit = unit[0] if (isinstance(unit, list) and len(unit) == 1) else unit
-        unit = '' if unit == 'unkown' else unit
-    except KeyError:
-        unit = ''
-
+    unit = ''
+    if xda.name != 'time': # unit='s' but shows formatted time string
+        try:
+            unit = xda.attrs['units']
+            unit = unit[0] if (isinstance(unit, list) and len(unit) == 1) else unit
+            unit = '' if unit == 'unkown' else unit
+        except KeyError:
+            pass # no unit for xda
     return value, unit
 
 def _get_location_text(name, value, units):
     ''' Format value and unit (if any) and return Panel StaticText '''
-    if not isinstance(value, str):
-        # Format numeric and datetime values
-        if name == "FLAG":
-            value = "nan" if np.isnan(value) else int(value)
-        elif isinstance(value, float):
-            if np.isnan(value):
-                value = "nan"
-            elif value < 1e6:
-                value = f"{value:.4f}"
-            else:
-                value = f"{value:.4e}"
-        elif isinstance(value, np.datetime64):
-            value = to_datetime(np.datetime_as_string(value)).strftime(TIME_FORMAT)
-            units.pop(name) # no unit for datetime string
-    unit = units[name] if name in units else ""
+    if "FLAG" in name:
+        value = "nan" if np.isnan(value) else int(value)
+    else:
+        value = format_value(value)
+
+    unit = units[name] if name in units and not isinstance(value, np.datetime64) else ""
     return pn.widgets.StaticText(name=name, value=f"{value} {unit}")
 
 def _layout_point_location(text_list):
@@ -256,3 +272,13 @@ def _layout_point_location(text_list):
     # Add last column
     location_row.append(location_col)
     return location_row
+
+def _str_to_value(coord, valuestr):
+    ''' Convert value string to numeric or datetime '''
+    if coord == 'time':
+        return to_datetime(valuestr)
+
+    if coord == 'frequency':
+        return float(valuestr)
+
+    return round(float(valuestr)) # baseline, antenna_name, or polarization as index

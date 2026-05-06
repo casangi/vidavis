@@ -6,7 +6,7 @@ import xarray as xr
 
 from vidavis.plot.ms_plot._ms_plot_constants import TIME_FORMAT
 
-def select_ps(ps_xdt, logger, query=None, string_exact_match=True, **kwargs):
+def select_ps(ps_xdt, query=None, string_exact_match=True, **kwargs):
     '''
         Apply selection query and kwargs to ProcessingSet using exact match or partial match.
         See https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
@@ -15,15 +15,13 @@ def select_ps(ps_xdt, logger, query=None, string_exact_match=True, **kwargs):
         Throws exception if selection fails.
     '''
     # Do PSXdt selection
-    logger.debug(f"Applying selection to ProcessingSet: query={query}, {kwargs}")
     ps_selected_xdt = ps_xdt.xr_ps.query(query=query, string_exact_match=string_exact_match, **kwargs)
     if string_exact_match:
         ps_selected_xdt = _select_ps_ms(ps_selected_xdt, kwargs)
     ps_selected_xdt.attrs = ps_xdt.attrs
     return ps_selected_xdt
 
-#pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
-def select_ms(ps_xdt, logger, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
+def select_ms(ps_xdt, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
     ''' Apply selection to each MeasurementSetXdt.
         See https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel
         Return selected ProcessingSet DataTree.
@@ -34,7 +32,6 @@ def select_ms(ps_xdt, logger, indexers=None, method=None, tolerance=None, drop=F
     time_selection = None
     baseline_selection = None
     if indexers_kwargs:
-        logger.debug(f"Applying selection to each MeasurementSet: {indexers_kwargs}")
         dim_selection, time_selection, baseline_selection = _sort_selections(ps_xdt, indexers_kwargs)
 
     # Report (debug) selected numeric values, possibly using 'nearest' or other method
@@ -62,7 +59,6 @@ def select_ms(ps_xdt, logger, indexers=None, method=None, tolerance=None, drop=F
 
     selected_ps.attrs = ps_xdt.attrs
     return selected_ps
-#pylint: enable=too-many-arguments, too-many-positional-arguments, too-many-locals
 
 def _select_ps_ms(ps_xdt, ps_selection):
     ''' Select MeasurementSets in ProcessingSet according to ps selection.
@@ -71,7 +67,7 @@ def _select_ps_ms(ps_xdt, ps_selection):
     ms_selected_xdt = xr.DataTree() # return value
     ms_selection = {}
     for key, val in ps_selection.items():
-        if key in ['field_name', 'scan_name', 'polarization']:
+        if key in ['field_name', 'scan_name', 'source_name', 'polarization']:
             ms_selection[key] = val
 
     # Do selection on each ms_xdt
@@ -82,8 +78,8 @@ def _select_ps_ms(ps_xdt, ps_selection):
         for key, val in ms_selection.items():
             try:
                 if key == 'polarization':
-                    ms_xdt = ms_xdt.sel(polarization=val)
-                elif key in ['scan_name', 'field_name', 'source_name']:
+                    ms_xdt[name] = ms_xdt.sel(polarization=val)
+                else:
                     ms_xdt, success = _select_time_dim_coordinate(ms_xdt, key, val)
                     if not success:
                         break
