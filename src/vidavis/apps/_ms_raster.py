@@ -107,7 +107,7 @@ class MsRaster(MsPlot):
         if self._ms_data and self._ms_data.is_valid():
             try:
                 self._plot_inputs.set_ps_selection(string_exact_match, query, kwargs)
-                self._ms_data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
+                self._ms_data.select_ps(string_exact_match=string_exact_match, query=query, **kwargs)
             except KeyError as ke:
                 error = "ProcessingSet selection yielded empty ProcessingSet."
                 if not self._show_gui:
@@ -198,17 +198,14 @@ class MsRaster(MsPlot):
             inputs['data_dims'] = data_dims
 
         self._plot_inputs.set_inputs(inputs)
-        ps_selection = self._plot_inputs.get_ps_selection()
-        if ps_selection:
-            self._logger.info("Create raster plot with ProcessingSet selection: %s", ps_selection)
-        ms_selection = self._plot_inputs.get_ms_selection()
-        if ms_selection:
-            self._logger.info("Create raster plot with MeasurementSet selection: %s", ms_selection)
 
         if not self._show_gui:
             # Cannot plot if no MS
             if not self._ms_data or not self._ms_data.is_valid():
                 raise RuntimeError("Cannot plot MS: input MS path is invalid or missing.")
+
+            # Report ps and ms selections
+            self._plot_inputs.report_selections(self._logger)
 
             # Create raster plot and add to plot list
             try:

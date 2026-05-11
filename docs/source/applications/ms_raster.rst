@@ -786,7 +786,7 @@ In the Python console, the data groups now include the new *test* group::
         weight = WEIGHT
         uvw = UVW
         field_and_source = field_and_source_base_xds
-        description = Test manual flags from base group
+        description = Test manual flagging from base group
         date = 2026-05-06T21:27:02.689427+00:00
 
 To go back to the original flags in the *base* data group, simply clear the

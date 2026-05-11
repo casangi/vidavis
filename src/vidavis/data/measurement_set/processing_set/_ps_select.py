@@ -6,7 +6,7 @@ import xarray as xr
 
 from vidavis.plot.ms_plot._ms_plot_constants import TIME_FORMAT
 
-def select_ps(ps_xdt, query=None, string_exact_match=True, **kwargs):
+def select_ps(ps_xdt, string_exact_match=True, query=None, **kwargs):
     '''
         Apply selection query and kwargs to ProcessingSet using exact match or partial match.
         See https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
@@ -15,8 +15,9 @@ def select_ps(ps_xdt, query=None, string_exact_match=True, **kwargs):
         Throws exception if selection fails.
     '''
     # Do PSXdt selection
-    ps_selected_xdt = ps_xdt.xr_ps.query(query=query, string_exact_match=string_exact_match, **kwargs)
+    ps_selected_xdt = ps_xdt.xr_ps.query(string_exact_match=string_exact_match, query=query, **kwargs)
     if string_exact_match:
+        # Do selection in each ms
         ps_selected_xdt = _select_ps_ms(ps_selected_xdt, kwargs)
     ps_selected_xdt.attrs = ps_xdt.attrs
     return ps_selected_xdt

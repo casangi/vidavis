@@ -599,16 +599,50 @@ class MsPlot:
         flag_data_group = name.lower()
         self._notify(f"Flags saved to: FLAG_{flag_name}. Plotting data group: {flag_data_group}.", "success")
 
-        # Plot new flags in plot inputs
-        self._plot_inputs.set('data_group', flag_data_group)
-        flagged_plot = self._do_plot()
-        self._logger.info("Plot updated with new flags")
-        dmaps = self._get_locate_dmaps()
-        self._panel[0][0].object = flagged_plot * dmaps
-
-        # Update plot inputs
-        self._fill_inputs_column()
+        # Plot new flags with previous plot inputs
+        self._plot_flags(flag_data_group)
 
         # Close flag panel
         self._panel[0].pop()
 # pylint: enable=too-many-arguments, too-many-positional-arguments, too-many-locals
+
+    def _plot_flags(self, flag_data_group):
+        ''' Redo plot with current selections and inputs and flag data group '''
+        ps_selections = self._plot_inputs.get_ps_selection()
+        ms_selections = self._plot_inputs.get_ms_selection()
+        self.clear_selection()
+
+        # Do ps selection with data group
+        if ps_selections:
+            for ps_selection in ps_selections:
+                string_exact_match = ps_selection['string_exact_match']
+                query = ps_selection['query']
+                selection = ps_selection['selection']
+                selection['data_group_name'] = flag_data_group
+                self._plot_inputs.set_ps_selection(string_exact_match=string_exact_match, query=query, selection=selection)
+                self._ms_data.select_ps(string_exact_match=string_exact_match, query=query, **selection)
+        else:
+            selection = {'data_group_name': flag_data_group}
+            self._plot_inputs.set_ps_selection(string_exact_match=True, query=None, selection=selection)
+            self._ms_data.select_ps(string_exact_match=True, query=None, **selection)
+
+        # Do ms selection
+        for ms_selection in ms_selections:
+            indexers = ms_selection['indexers']
+            method = ms_selection['method']
+            tolerance = ms_selection['tolerance']
+            drop = ms_selection['drop']
+            selection = ms_selection['selection']
+            self._plot_inputs.set_ms_selection(indexers=indexers, method=method, tolerance=tolerance, crop=drop, selection=selection)
+            self._ms_data.select_ms(indexers=indexers, method=method, tolerance=tolerance, drop=drop, **selection)
+
+        # Make plot and add to panel
+        self._plot_init = False
+        flagged_plot = self._do_plot()
+        dmaps = self._get_locate_dmaps()
+        self._panel[0][0].object = flagged_plot * dmaps
+        self._logger.info("Plot updated with new flags")
+        self._last_plot = flagged_plot
+
+        # Update plot inputs
+        self._fill_inputs_column()

@@ -23,9 +23,7 @@ def get_locate_value(xds, coord, value):
             # Bokeh datetime values are floating point values that represent milliseconds-since-epoch (unix time)
             value = to_datetime(value, unit='ms')
         value_sel = {coord: value}
-        nearest_value = xds[coord].sel(indexers=None, method='nearest', tolerance=None, drop=False, **value_sel).values
-        return nearest_value
-
+        value = xds[coord].sel(indexers=None, method='nearest', tolerance=None, drop=False, **value_sel).values
     return value
 
 def format_value(value):
@@ -194,6 +192,7 @@ def _get_point_location(xds, position, vis_axis, data_group):
     units = {}
 
     if xds:
+        vis_name = xds.attrs['data_groups'][data_group]['correlated_data']
         flag_name = xds.attrs['data_groups'][data_group]['flag']
         try:
             sel_xds = xds.sel(indexers=None, method='nearest', tolerance=None, drop=False, **position)
@@ -208,6 +207,8 @@ def _get_point_location(xds, position, vis_axis, data_group):
                     continue
                 if 'FLAG' in data_var and data_var != flag_name:
                     continue
+                if 'VIS' in data_var and data_var != vis_name:
+                    continue
                 val, unit = _get_xda_val_unit(sel_xds[data_var])
                 if data_var == 'UVW':
                     names = ['U', 'V', 'W']
@@ -215,15 +216,13 @@ def _get_point_location(xds, position, vis_axis, data_group):
                         values[name] = val[i]
                         units[name] = unit
                 else:
+                    # Set complex component name for visibilities
+                    if data_var == vis_name:
+                        data_var = vis_axis.upper()
                     values[data_var] = val
                     units[data_var] = unit
         except KeyError:
             pass
-
-    # Set complex component name for visibilities
-    vis_name = xds.attrs['data_groups'][data_group]['correlated_data']
-    if vis_name in values:
-        values[vis_axis.upper()] = values.pop(vis_name)
     return values, units
 # pylint: enable=too-many-locals
 

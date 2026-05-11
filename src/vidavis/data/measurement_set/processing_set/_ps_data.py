@@ -3,6 +3,7 @@ MeasurementSet data backend using xradio Processing Set.
 '''
 
 from datetime import datetime, UTC
+import os
 
 import numpy as np
 import pandas as pd
@@ -168,7 +169,7 @@ class PsData:
         spw_names = self.get_summary(data_group)['spw_name']
         return spw_names[0]
 
-    def select_ps(self, query=None, string_exact_match=True, **kwargs):
+    def select_ps(self, string_exact_match=True, query=None, **kwargs):
         ''' Apply data group and summary column selection to ProcessingSet. See ProcessingSetXdt query().
             https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
             Also applies selection to ms_xdt in ps.
@@ -177,7 +178,7 @@ class PsData:
             Throws exception if selection fails.
         '''
         ps_xdt = self._get_ps_xdt()
-        self._selected_ps_xdt = select_ps(ps_xdt, query=query, string_exact_match=string_exact_match, **kwargs)
+        self._selected_ps_xdt = select_ps(ps_xdt, string_exact_match=string_exact_match, query=query, **kwargs)
 
     def select_ms(self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
         ''' Apply dimension and data group selection to MeasurementSet. See MeasurementsSetXdt sel().
@@ -228,14 +229,16 @@ class PsData:
                     return True
         return False
 
+# pylint: disable=too-many-locals
     def flag_data(self, src_group_name, flag_selection, flag_name, description):
         ''' Flag selection in source data group flags, using flag_name for new data variable and data group '''
+        self._logger.debug(f"Flag data in group {src_group_name} selection {flag_selection}")
         flag_group_name = flag_name.lower()
         flag_data_name = "FLAG_" + flag_name.upper()
+        flagged_data_group = {'flag': flag_data_name, 'description': description, 'date': datetime.now(UTC).isoformat()}
 
-        for ms_name in self._selected_ps_xdt:
-            ms_xdt = self._selected_ps_xdt[ms_name]
-
+        for ms_name in self._ps_xdt:
+            ms_xdt = self._ps_xdt[ms_name]
             if src_group_name not in ms_xdt.attrs['data_groups']:
                 continue
 
@@ -261,21 +264,20 @@ class PsData:
                         except KeyError:
                             pass # not in this xds
 
-            # Add new data group to ms
-            flagged_data_group = {'flag': flag_data_name, 'description': description, 'date': datetime.now(UTC).isoformat()}
-            self._selected_ps_xdt[ms_name] = self._selected_ps_xdt[ms_name].xr_ms.add_data_group(flag_group_name, flagged_data_group, src_group_name)
-            flagged_data_group = self._selected_ps_xdt[ms_name].attrs['data_groups'][flag_group_name]
+            # Add new data group to ms, and add to data group dict
+            ms_xdt = ms_xdt.xr_ms.add_data_group(flag_group_name, flagged_data_group, src_group_name)
+            self._ms_data_groups[ms_name][flag_group_name] = ms_xdt.attrs['data_groups'][flag_group_name]
 
-            # Set flags and data group in original ps
-            self._ps_xdt[ms_name][flag_data_name] = self._selected_ps_xdt[ms_name][flag_data_name]
-            self._ps_xdt[ms_name].attrs['data_groups'] = self._ms_data_groups[ms_name] # restore unselected data groups
-            self._ps_xdt[ms_name] = self._ps_xdt[ms_name].xr_ms.add_data_group(flag_group_name, flagged_data_group, src_group_name)
+            # Set flags and data group in ms
+            ms_xdt.attrs['data_groups'] = self._ms_data_groups[ms_name] # restore unselected data groups
+            ms_zarr_store = os.path.join(self._zarr_path, ms_name)
+            ms_xdt.to_zarr(store=ms_zarr_store, mode='a', consolidated=True)
+            self._logger.debug(f"Saved flags to {ms_zarr_store}")
 
-            # Set data group in data group dict
-            self._ms_data_groups[ms_name][flag_group_name] = flagged_data_group
-
-        # Write original ps to zarr in append mode
-        self._ps_xdt.to_zarr(store=self._zarr_path, mode='a')
+        # Write root ps metadata to zarr in append mode
+        self._ps_xdt.to_zarr(store=self._zarr_path, mode='a', consolidated=True)
+        self._logger.debug(f"Saved data group to {self._zarr_path}")
+# pylint: enable=too-many-locals
 
     def _set_data_groups(self):
         ''' Set dict of data groups per ms in Processing Set data. '''
@@ -385,12 +387,14 @@ class PsData:
         try:
             # Single value
             if isinstance(freq_selection, float):
-                sel_xda = xds.frequency.sel(frequency=freq_selection, method='nearest')
+                sel_xda = xds.frequency.sel(frequency=freq_selection, method='nearest', tolerance=xds.frequency.attrs['channel_width']['data'])
                 return sel_xda.values.item()
 
             # Slice
             sel_xda = xds.frequency.sel(frequency=freq_selection)
-            return slice(sel_xda.values[0], sel_xda.values[-1])
+            if sel_xda.size >= 1:
+                return slice(sel_xda.values[0], sel_xda.values[-1])
+            return None
         except KeyError:
             # Frequency not in this xds
             return None
