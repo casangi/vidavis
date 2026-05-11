@@ -126,7 +126,7 @@ class MsData:
         self._log_no_ms()
         return None
 
-    def select_ps(self, query=None, string_exact_match=True, **kwargs):
+    def select_ps(self, string_exact_match=True, query=None, **kwargs):
         ''' Apply data group and summary column selection to ProcessingSet. See ProcessingSetXdt query().
             https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
             Selections are cumulative until clear_selection() is called.
@@ -134,7 +134,7 @@ class MsData:
             Throws exception if selection fails.
         '''
         if self._data_initialized:
-            self._data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
+            self._data.select_ps(string_exact_match=string_exact_match, query=query, **kwargs)
         else:
             self._log_no_ms()
 

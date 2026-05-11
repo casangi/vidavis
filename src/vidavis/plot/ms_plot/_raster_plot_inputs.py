@@ -10,7 +10,7 @@ class RasterPlotInputs:
     '''
 
     def __init__(self):
-        self._inputs = {'ps_selection': [], 'ms_selection': []}
+        self._inputs = {'ps_selection': [], 'ms_selection': [], 'data_group': 'base'}
 
     def get_inputs(self):
         ''' Getter for stored plot inputs '''
@@ -31,48 +31,34 @@ class RasterPlotInputs:
 
     def set_ps_selection(self, string_exact_match, query, selection):
         ''' Add ProcessingSet selection dict to existing selection in plot inputs '''
-        self._inputs['ps_selection'].append({'string_exact_match': string_exact_match, 'query': query, 'selection': selection})
         if 'data_group_name' in selection:
-            self._inputs['data_group'] = selection['data_group_name']
+            self.set('data_group', selection.pop('data_group_name'))
+        if query or selection:
+            ps_selection = {'string_exact_match': string_exact_match, 'query': query, 'selection': selection}
+            self._inputs['ps_selection'].append(ps_selection)
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
     def set_ms_selection(self, indexers, method, tolerance, drop, selection):
         ''' Add MeasurementSet selection dict to existing selection in plot inputs '''
-        ms_selection = {'method': method, 'tolerance': tolerance, 'drop': drop}
-        if indexers:
-            ms_selection['selection'] = indexers
-        else:
-            ms_selection['selection'] = selection
-        self._inputs['ms_selection'].append(ms_selection)
-
         if 'data_group_name' in selection:
-            self._inputs['data_group'] = selection['data_group_name']
-# pylint: enable=too-many-arguments, too-many-positional-arguments
+            self.set('data_group', selection.pop('data_group_name'))
+        if indexers or selection:
+            ms_selection = {'indexers': indexers, 'method': method, 'tolerance': tolerance, 'drop': drop, 'selection': selection}
+            self._inputs['ms_selection'].append(ms_selection)
 
     def get_ps_selection(self, key=None):
         ''' Return value for ProcessingSet selection key, or None if key does not exist.
-            Return entire selection if key is None.
+            Return entire selection kv if key is None.
         '''
         ps_selection = self.get('ps_selection')
 
         if key:
             for selection in ps_selection:
-                try:
+                if key in selection['selection']:
                     return selection['selection'][key]
-                except KeyError:
-                    continue
             return None
-
-        ps_selections = {}
-        for selection in ps_selection:
-            ps_selections |= selection['selection']
-
-        # Add data group and auto spw selection to return all ps selection
-        if 'data_group' in self._inputs:
-            ps_selections['data_group'] = self._inputs['data_group']
-        if 'auto_spw' in self._inputs:
-            ps_selections['spw_name'] = self._inputs['auto_spw']
-        return ps_selections
+        return ps_selection
+# pylint: enable=too-many-arguments, too-many-positional-arguments
 
     def get_ms_selection(self, key=None):
         ''' Return value for MeasurementSet selection key, or None if key does not exist.
@@ -87,16 +73,7 @@ class RasterPlotInputs:
                 except KeyError:
                     continue
             return None
-
-        # Add data group and auto dimension selection to return all ms selection
-        ms_selections = {}
-        for selection in ms_selection:
-            ms_selections |= selection['selection']
-        if 'data_group' in self._inputs:
-            ms_selections['data_group'] = self._inputs['data_group']
-        if 'dim_selection' in self._inputs:
-            ms_selections |= self._inputs['dim_selection']
-        return ms_selections
+        return ms_selection
 
     def set_inputs(self, plot_inputs):
         ''' Setter for storing plot inputs from MsRaster.plot() '''
@@ -109,6 +86,7 @@ class RasterPlotInputs:
         if key == 'selection':
             self._inputs['ps_selection'] = []
             self._inputs['ms_selection'] = []
+            self._inputs.pop('dim_selection')
         else:
             try:
                 del self._inputs[key]
@@ -118,6 +96,27 @@ class RasterPlotInputs:
     def check_inputs(self):
         ''' Check input values are valid, adjust for data dims '''
         check_inputs(self._inputs)
+
+    def report_selections(self, logger):
+        ''' Report simplified kv pairs for ps selection and ms selection to logger '''
+        ps_selection = {'data_group': self.get('data_group')}
+        input_ps_selection = self.get_ps_selection()
+        for selection in input_ps_selection:
+            if selection['query']:
+                ps_selection['query'] = ", ".join([ps_selection['query'], selection['query']]) if 'query' in ps_selection else selection['query']
+            for key, val in selection['selection'].items():
+                ps_selection[key] = val
+        logger.info("Create raster plot with ProcessingSet selection: %s", ps_selection)
+
+        ms_selection = {}
+        input_ms_selection = self.get_ms_selection()
+        for selection in input_ms_selection:
+            for key, val in selection['indexers'].items():
+                ms_selection[key] = val
+            for key, val in selection['selection'].items():
+                ms_selection[key] = val
+        if ms_selection:
+            logger.info("Create raster plot with MeasurementSet selection: %s", ms_selection)
 
     def is_layout(self):
         ''' Determine if plot is a layout using plot inputs '''
