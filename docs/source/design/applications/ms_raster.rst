@@ -7,9 +7,8 @@ MsRaster Design
 
 ``MsRaster`` is the first test of the approach described in
 :ref:`visibility plotting <design-plotter-design>`. It provides an optional GUI
-interface to a Python interface to create raster plots in a browser tab or
+interface to a Python interface to create raster plots shown in a browser tab or
 saved to file.
-
 
 MeasurementSet Data
 ```````````````````

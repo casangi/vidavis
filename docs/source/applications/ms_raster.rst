@@ -5,9 +5,10 @@ MsRaster
 .. currentmodule:: applications
 
 MsRaster is an application for 2-dimensional raster visualization and flagging
-of visibility and spectrum data. This data must be in the MeasurementSet v4
-zarr format, or MeasurementSet v2 table format which will be automatically
-converted to MeasurementSet v4 if the necessary packages are installed.
+of visibility and spectrum data. This data must be in a Zarr file using the
+XRADIO :xref:`schema`. An input path for the MeasurementSet v2 table format
+will be automatically converted to MeasurementSet v4 if the necessary packages
+for the conversion are installed.
 
 Implementation
 --------------
@@ -39,8 +40,11 @@ Raster Plots
 MsRaster gives the user flexibility to select data, style the plots, set plot
 axes and the complex component, aggregate along one or more data dimensions,
 iterate along a data dimension, and layout multiple plots in a grid.  All
-parameters available from the MsRaster methods are available in the interactive
-GUI.
+plot parameters available from the MsRaster methods are available in the
+interactive GUI. When a single plot is shown, the metadata for the cursor
+position will be displayed below the plot. Points and boxes may be drawn, and
+the metadata for each point in these regions will be displayed in tabs. These
+regions may also be selected for flagging.
 
 Using MsRaster to Create Plots
 ------------------------------
@@ -62,7 +66,7 @@ Construct MsRaster Object
 
     >>> msr = MsRaster(ms=None, log_level='info', log_to_file=True, show_gui=False)
 
-* **ms** (str): path to MSv2 (usually .ms extension) or MSv4 (usually .zarr
+* **ms** (str): path to MSv4 (usually .zarr extension) or MSv2 (usually .ms
   extension) file. Required when show_gui=False.
 * **log_level** (str): logging threshold. Options include 'debug', 'info',
   'warning', 'error', 'critical'. Default 'info'.
@@ -71,20 +75,20 @@ Construct MsRaster Object
 * **show_gui** (bool): whether to launch the interactive GUI in a browser tab.
   Default False.
 
-MsRaster can be constructed with the **ms** path to a MSv2 or MSv4 file. If a
+MsRaster can be constructed with the **ms** path to a MSv4 or MSv2 file. If a
 MSv2 path is supplied and the correct dependencies have been installed
 separately (see :ref:`install_conversion`), the MSv2 will automatically be
-converted to the MSv4 zarr format in the same directory as the MSv2, with the
+converted to the MSv4 Zarr format in the same directory as the MSv2, with the
 extension *.ps.zarr*. For more information on the MSv4 data format, see the
 XRADIO
 `Measurement Set Tutorial <https://xradio.readthedocs.io/en/latest/measurement_set/tutorials/measurement_set_tutorial.html>`_.
 
 .. warning::
-   MSv2 files will be converted to zarr using the xradio default partitioning:
+   MSv2 files will be converted to Zarr using the XRADIO default partitioning:
    **data description** (spectral window and polarization setup), **observation
    mode**, and **field**.  If the MSv2 to be converted has numerous fields, such
    as a mosaic, it is best to
-   `convert the MSv2 to zarr <https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.convert_msv2_to_processing_set>`_
+   `convert the MSv2 to Zarr <https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.convert_msv2_to_processing_set>`_
    without field partitioning, prior to using MsRaster.
 
 The **log_level** can be set to the desired level, with log messages output to
@@ -105,7 +109,8 @@ Explore MS Data
 
 MsRaster may be used to explore the MeasurementSet for plotting. The
 *.zarr* file is opened as an :xref:`xradio` ProcessingSetXdt, which is an
-:xref:`xarray` DataTree composed of MSv4 DataTrees (see `Measurement Set Tutorial
+:xref:`xarray` DataTree (Xdt) composed of MSv4 DataTrees (see `Measurement Set
+Tutorial
 <https://xradio.readthedocs.io/en/latest/measurement_set/tutorials/measurement_set_tutorial.html>`_
 for more information). The :xref:`xradio` custom functions for data exploration
 in ProcessingSetXdt are available in MsRaster.
@@ -155,7 +160,7 @@ data groups::
 
 .. _summary:
 
-The ProcessingSetXdt metadata for a specified :xref:`data_groups` name can be
+The ProcessingSetXdt metadata for one of the :xref:`data_groups` name can be
 displayed in a tabular format.  These column names and values can be used to
 select the ProcessingSetXdt (see ``select_ps()`` in :ref:`select_data`)::
 
@@ -380,8 +385,9 @@ Note the ProcessingSetXdt selection is not applied to the data *in* the
 MeasurementSetXdts, unless **exact_string_match** is True and the column name is
 'polarization', 'scan_name', or 'field_name'.
 
-For additional explanation and examples, see also `ProcessingSetXdt.query() 
-<https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query>`_.
+For additional explanation and examples, see also ``query()`` in the
+`ProcessingSetXdt API
+<https://xradio.readthedocs.io/en/latest/measurement_set/api.html#processingsetxdt-api>`_.
 
 Select MeasurementSetXdt
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -426,8 +432,8 @@ string format 'dd-Mon-YYYY HH:MM:SS' as shown in
     >>> msr.select_ms(polarization=['XX', 'YY']
     >>> msr.select_ms(time=slice('19-Nov-2012 09:00:00', '19-Nov-2012 09:12:00'))
 
-For additional explanation and examples, see `MeasurementSetXdt.sel() 
-<https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel>`_.
+For additional explanation and examples, see ``sel()`` in the `MeasurementSetXdt
+API <https://xradio.readthedocs.io/en/latest/measurement_set/api.html#measurementsetxdt-api>`_.
 
 .. warning::
    All selections using ``select_ps()`` and ``select_ms()`` are cumulative, with
@@ -446,8 +452,8 @@ To clear previous selections and return to the original ProcessingSetXdt::
     * **spw name**: for consistent data shapes, the first spectral window (by
       time) is selected.
     * **data group**: default 'base'.
-    * **data dimensions**:  the dimensions not chosen for *x_axis*,
-      *y_axis*, aggregation *agg_axis* or iteration *iter_axis* are
+    * **data dimensions**:  the dimensions which have not been chosen for
+      *x_axis*, *y_axis*, aggregation *agg_axis* or iteration *iter_axis* are
       automatically selected. After user selections are applied, the set of
       dimension values are sorted, and the first is used. Time and frequency are
       numeric values. For baseline, names are formed as 'ant1_name & ant2_name'
@@ -721,7 +727,7 @@ in the **Locate Points** tab:
 .. image:: _static/msraster_duplicate_points.png
 .. image:: _static/msraster_duplicate_points_locate.png
 
-.. _save_plot:
+.. _flag_data:
 
 Flag Plot Data
 ````````````````
@@ -759,7 +765,7 @@ When ready to flag, click the **Flag** button. If the new flag data variable
 name exists in the ProcessingSet, an error will pop up and another name may be
 entered. Otherwise, the current flags are copied to the **Flag Name** as
 described above, the flags are set according to the region selection, and the
-data group is created. The new flags and data group are written to the zarr file
+data group is created. The new flags and data group are written to the Zarr file
 on disk, and a popup notification will indicate the flagging was a success. Then
 the dialog is closed and the new data group is automatically selected and
 plotted, as indicated in the *data_group* listed in the **Plot Inputs** tab.
@@ -796,6 +802,8 @@ selection and select this data group:
     >>> msr.select_ps(data_group_name='base')
     >>> msr.plot()
     >>> msr.show()
+
+.. _save_plot:
 
 Save Raster Plot
 ````````````````

@@ -4,9 +4,10 @@ Overview
 
 .. currentmodule:: applications
 
-The data for the ``vidavis`` applications must be in the MeasurementSet v4
-zarr format, or MeasurementSet v2 format which will be automatically converted
-to MeasurementSet v4 if the necessary packages are installed.
+The data source for the ``vidavis`` applications must be in the MeasurementSet
+v4 (MSv4) Zarr format, but they will accept MeasurementSet v2 (MSv2) file paths.
+The MSv2s will be automatically converted to MSv4 Zarr files if the necessary
+packages are installed, or the plots will fail.
 
 .. _infrastructure:
 
@@ -36,8 +37,7 @@ data I/O, logging, plotting, and interactive dashboards:
           :width: 100
 
 * :xref:`xradio` (Xarray Radio Astronomy Data I/O) implements the MeasurementSet
-  v4.0.0 schema using :xref:`xarray` to provide an interface for radio astronomy
-  data
+  v4 schema as Zarr files and uses :xref:`xarray` to provide an interface for data
 
 * :xref:`toolviper` is used for creating the Dask.distributed client and for
   logging
@@ -114,8 +114,8 @@ Install required packages::
 Install for MSv2 Conversion
 ```````````````````````````
 
-Currently, casacore and zarr are automatically installed with xradio for
-vidavis if the system platform is Linux.
+Currently, casacore and zarr Python packages are automatically installed with
+:xref:`xradio` for vidavis if the system platform is Linux.
 
 On macOS, zarr only is installed. To enable conversion from MSv2 to MSv4, it is
 required to **pre-install** python-casacore using
