@@ -28,5 +28,3 @@
 '''Common tools used in creating applications.'''
 
 from ._app_context import AppContext
-
-from ._logging import get_logger

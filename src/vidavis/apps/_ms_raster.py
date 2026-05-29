@@ -31,7 +31,7 @@ class MsRaster(MsPlot):
         show_gui (bool): whether to launch the interactive GUI in a browser tab. Default False.
 
     Example:
-        from vidavis.apps import MsRaster
+        from vidavis import MsRaster
         msr = MsRaster(ms='myvis.ms')
         msr.summary()
         msr.set_style_params(unflagged_cmap='Plasma', flagged_cmap='Greys', show_colorbar=True)

@@ -10,11 +10,12 @@ This is part of the :xref:`casa` project at the :xref:`nrao`.
 
 This project is currently in a **pre-alpha** state, but its functionality is
 being built out as the project builds out applications. The project is based
-upon :xref:`bokeh` and :xref:`electron`. This combination will allow the project
-to provide data visualization to Python command-line users, Jupyter Notebook
-users, and desktop application users with a stand-alone application, using the
-same codebase in all cases. These technologies, and by assocation this project,
-represent a radical shift away from traditional, GUI toolkit-based development.
+upon :xref:`bokeh` and Holoviz packages. This combination will allow the project
+to provide data visualization to Python command-line users and Jupyter Notebook
+users (and eventually desktop application users with a stand-alone application
+using :xref:`electron`), using the same codebase in all cases. These
+technologies, and by assocation this project, represent a radical shift away
+from traditional, GUI toolkit-based development.
 
 .. toctree::
    :maxdepth: 2

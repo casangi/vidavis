@@ -15,7 +15,7 @@ maintenance.
 Traditional Approach
 --------------------
 
-In the past our GUIs have been very big C++/`Qt <https://www.qt.io/>`_
+In the past, the :xref:`casa` GUIs have been very big C++/`Qt <https://www.qt.io/>`_
 applications which were monolithic, difficult to make script-able and complex to
 maintain. They were monolithic because at the time when Qt was adopted, having
 one GUI library that could be built on different platforms and work with
@@ -109,4 +109,3 @@ Design Documents
 
    visibility_plotting
    applications/ms_raster
-   ../python/index
