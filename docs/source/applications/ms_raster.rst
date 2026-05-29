@@ -85,11 +85,10 @@ XRADIO
 
 .. warning::
    MSv2 files will be converted to Zarr using the XRADIO default partitioning:
-   **data description** (spectral window and polarization setup), **observation
-   mode**, and **field**.  If the MSv2 to be converted has numerous fields, such
-   as a mosaic, it is best to
-   `convert the MSv2 to Zarr <https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.convert_msv2_to_processing_set>`_
-   without field partitioning, prior to using MsRaster.
+   **data description** (spectral window and polarization setup) and
+   **observation mode**. For other partitioning, you may
+   `convert the MSv2 to Zarr <https://xradio.readthedocs.io/en/latest/measurement_set/api.html#xradio.measurement_set.convert_msv2_to_processing_set>`_
+   prior to using MsRaster.
 
 The **log_level** can be set to the desired level, with log messages output to
 the Python console.  When the **log_to_file** option is True (default), log
