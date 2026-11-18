@@ -1,6 +1,18 @@
 vidavis - VIsibility DAta VISualization
 =======================================
 
+.. warning::
+
+   **vidavis is no longer developed.** It has been replaced by
+   `cubevis <https://github.com/casangi/cubevis>`_.
+   Its visibility raster plots (``MsRaster``) are replaced by cubevis's
+   ``visplot``, which plots and flags visibility data in MSv2 measurement
+   sets and in MSv4 / Processing Sets.
+   Install it with ``pip install "cubevis[visplot]"``; its documentation is at
+   https://casangi.github.io/cubevis/
+
+   This repository is kept, read-only, for reference.
+
 This is a **pre-alpha** package. All applications are in various phases of
 *prototyping*.
 

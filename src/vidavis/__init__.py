@@ -28,6 +28,11 @@
 '''vidavis provides python applications to visualize radio astronomy visibility
 data'''
 
+import warnings as __warnings
+__warnings.warn( 'vidavis is no longer developed; use cubevis instead '
+                 '(pip install cubevis, https://casangi.github.io/cubevis/)',
+                 DeprecationWarning, stacklevel=2 )
+
 try:
     from .__version__ import __version__
 except ModuleNotFoundError:
